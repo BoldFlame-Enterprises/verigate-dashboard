@@ -1,25 +1,29 @@
 # VeriGate Access Control - Web Dashboard
 
-This is the web admin dashboard for the VeriGate Access Control system.
+The admin web dashboard for the VeriGate Access Control system.
 
 ## 🚀 Features
 
-- **User Management**: CRUD operations for all users.
-- **Access Level Configuration**: Manage access levels (e.g., General, VIP, Staff).
-- **Area Management**: Define and manage scannable areas.
-- **Real-time Monitoring**: View the synchronization status of scanner devices.
-- **Reporting and Analytics**: Comprehensive reporting on scan data.
-- **Bulk Data Management**: Import and export users via CSV.
+- **Auth**: JWT login (with refresh-token handling) against the backend, role-gated to admins.
+- **Event management**: create/select events; every other view is scoped to the selected event.
+- **User management**: CRUD, deactivate, and bulk CSV import/export.
+- **Access & area configuration**: CRUD for access levels and areas, plus assignment management.
+- **Analytics**: scan-volume-over-time and grant/deny/area/access-level/scanner breakdown charts (Recharts), backed by cached backend aggregate endpoints, with CSV export of the raw scan log.
+- **Real-time sync monitoring**: each device's (pass/scan) last-sync time and online/stale/offline status.
+- **Incident & override review**: incident reports and emergency overrides filed from the scan app, reviewable/resolvable here.
 
 ## 🛠️ Tech Stack
 
-- **React 18**: JavaScript library for building user interfaces
-- **TypeScript**: Typed superset of JavaScript
-- **Vite**: Next-generation frontend tooling
-- **Tailwind CSS**: A utility-first CSS framework
+React 18 + TypeScript, Vite, Tailwind CSS, React Router, TanStack Query, React Hook Form + Zod, Recharts, Axios, lucide-react.
+
+## ⚙️ Configuration
+
+Set `VITE_API_URL` (see `.env.example`) to the backend's `/api` URL - defaults to `http://localhost:3000/api`.
 
 ## 📦 Scripts
 
-- `pnpm run dev`: Start the Vite development server.
-- `pnpm run build`: Build the application for production.
-- `pnpm run preview`: Preview the production build.
+- `npm run dev`: Start the Vite development server.
+- `npm run build`: Type-check and build for production.
+- `npm run preview`: Preview the production build.
+- `npm run lint`: Lint.
+- `npm run type-check`: Validate TypeScript types with no emit.
