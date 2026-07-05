@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "Admin Web Dashboard for QR Code Accreditation System",
   "private": true,
+  "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
@@ -26,6 +27,7 @@
     "tailwind-merge": "^1.14.0"
   },
   "devDependencies": {
+    "@types/node": "^20.8.0",
     "@types/react": "^18.2.22",
     "@types/react-dom": "^18.2.7",
     "@typescript-eslint/eslint-plugin": "^6.7.0",
