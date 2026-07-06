@@ -34,7 +34,9 @@ export function EventProvider({ children }: { children: ReactNode }) {
   const events = useMemo(() => data ?? [], [data]);
 
   useEffect(() => {
-    if (!selectedEventId && events.length > 0) {
+    if (events.length === 0) return;
+    const stillValid = events.some((e) => e.id === selectedEventId);
+    if (!selectedEventId || !stillValid) {
       setSelectedEventId(events[0].id);
     }
   }, [events, selectedEventId]);

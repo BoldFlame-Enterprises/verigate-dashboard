@@ -6,7 +6,7 @@ import { getErrorMessage } from '../lib/errors';
 
 export default function LoginPage() {
   const { user, login } = useAuth();
-  const [email, setEmail] = useState('admin@test.com');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
