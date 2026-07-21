@@ -20,6 +20,8 @@ React 18 + TypeScript, Vite, Tailwind CSS, React Router, TanStack Query, React H
 
 Set `VITE_API_URL` (see `.env.example`) to the backend's `/api` URL - defaults to `http://localhost:3000/api`.
 
+For Vercel, configure `VITE_API_URL` as a project environment variable for Production and Preview before deploying. Its value must include `/api`, for example `https://verigate-api.example.com/api`. The backend must list each deployed dashboard origin in `CORS_ORIGINS`. `vercel.json` provides the React Router fallback so direct visits to routes such as `/users` load the application.
+
 ## 📦 Scripts
 
 - `npm run dev`: Start the Vite development server.
