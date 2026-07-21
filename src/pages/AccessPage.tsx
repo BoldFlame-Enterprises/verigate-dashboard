@@ -22,6 +22,8 @@ export default function AccessPage() {
   const [assignLevelId, setAssignLevelId] = useState('');
   const [assignAreaId, setAssignAreaId] = useState('');
   const [assignError, setAssignError] = useState<string | null>(null);
+  const [userSearch, setUserSearch] = useState('');
+  const [userPage, setUserPage] = useState(1);
 
   const eventId = selectedEvent?.id;
 
@@ -43,13 +45,20 @@ export default function AccessPage() {
     enabled: !!eventId,
   });
 
-  const { data: users } = useQuery({
-    queryKey: ['users'],
+  const { data: userDirectory } = useQuery({
+    queryKey: ['users', { page: userPage, search: userSearch }],
     queryFn: async () => {
-      const res = await api.get<APIResponse<User[]>>('/users');
-      return res.data.data ?? [];
+      const res = await api.get<APIResponse<User[]>>('/users', {
+        params: { page: userPage, limit: 25, search: userSearch || undefined, is_active: true },
+      });
+      return {
+        users: res.data.data ?? [],
+        pagination: res.data.pagination ?? { page: userPage, limit: 25, total: 0, totalPages: 1 },
+      };
     },
+    enabled: showAssignForm,
   });
+  const users = userDirectory?.users ?? [];
 
   const { data: assignments, isLoading: assignmentsLoading, isError } = useQuery({
     queryKey: ['assignments', eventId],
@@ -157,24 +166,61 @@ export default function AccessPage() {
             </div>
             <form
               onSubmit={(e) => { e.preventDefault(); setAssignError(null); createAssignment.mutate(); }}
-              className="grid grid-cols-4 gap-3"
+              className="space-y-3"
             >
-              <select required value={assignUserId} onChange={(e) => setAssignUserId(e.target.value)} className="rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-800">
-                <option value="">User</option>
-                {users?.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
-              </select>
-              <select required value={assignLevelId} onChange={(e) => setAssignLevelId(e.target.value)} className="rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-800">
-                <option value="">Access level</option>
-                {levels?.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
-              </select>
-              <select required value={assignAreaId} onChange={(e) => setAssignAreaId(e.target.value)} className="rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-800">
-                <option value="">Area</option>
-                {areas?.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
-              </select>
-              <button type="submit" disabled={createAssignment.isPending} className="rounded-md bg-brand-600 px-3 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-60">
-                {createAssignment.isPending ? 'Assigning...' : 'Assign'}
-              </button>
-              {assignError && <p className="col-span-4 text-sm text-red-600 dark:text-red-400">{assignError}</p>}
+              <input
+                aria-label="Search assignment users"
+                value={userSearch}
+                onChange={(event) => {
+                  setUserSearch(event.target.value);
+                  setUserPage(1);
+                  setAssignUserId('');
+                }}
+                placeholder="Search users by name or email"
+                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-800"
+              />
+              <div className="grid grid-cols-4 gap-3">
+                <select aria-label="User" required value={assignUserId} onChange={(e) => setAssignUserId(e.target.value)} className="rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-800">
+                  <option value="">User</option>
+                  {users.map((u) => <option key={u.id} value={u.id}>{u.name} · {u.email}</option>)}
+                </select>
+                <select aria-label="Access level" required value={assignLevelId} onChange={(e) => setAssignLevelId(e.target.value)} className="rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-800">
+                  <option value="">Access level</option>
+                  {levels?.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
+                </select>
+                <select aria-label="Area" required value={assignAreaId} onChange={(e) => setAssignAreaId(e.target.value)} className="rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-800">
+                  <option value="">Area</option>
+                  {areas?.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+                </select>
+                <button type="submit" disabled={createAssignment.isPending} className="rounded-md bg-brand-600 px-3 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-60">
+                  {createAssignment.isPending ? 'Assigning...' : 'Assign'}
+                </button>
+              </div>
+              <div className="flex items-center justify-between text-sm text-gray-600 dark:text-gray-400">
+                <span>
+                  User page {userDirectory?.pagination.page ?? userPage} of {userDirectory?.pagination.totalPages ?? 1}
+                  {' · '}{userDirectory?.pagination.total ?? 0} matches
+                </span>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => { setUserPage((value) => Math.max(1, value - 1)); setAssignUserId(''); }}
+                    disabled={userPage <= 1}
+                    className="rounded border px-3 py-1 disabled:opacity-40 dark:border-gray-700"
+                  >
+                    Previous users
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setUserPage((value) => value + 1); setAssignUserId(''); }}
+                    disabled={userPage >= (userDirectory?.pagination.totalPages ?? 1)}
+                    className="rounded border px-3 py-1 disabled:opacity-40 dark:border-gray-700"
+                  >
+                    Next users
+                  </button>
+                </div>
+              </div>
+              {assignError && <p className="text-sm text-red-600 dark:text-red-400">{assignError}</p>}
             </form>
           </div>
         )}

@@ -25,14 +25,23 @@ export default function UsersPage() {
   const [formError, setFormError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [importResult, setImportResult] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const [search, setSearch] = useState('');
 
-  const { data: users, isLoading, isError } = useQuery({
-    queryKey: ['users'],
+  const { data: usersPage, isLoading, isError } = useQuery({
+    queryKey: ['users', { page, search }],
     queryFn: async () => {
-      const res = await api.get<APIResponse<User[]>>('/users');
-      return res.data.data ?? [];
+      const res = await api.get<APIResponse<User[]>>('/users', {
+        params: { page, limit: 50, search: search || undefined },
+      });
+      return {
+        users: res.data.data ?? [],
+        pagination: res.data.pagination ?? { page, limit: 50, total: 0, totalPages: 1 },
+      };
     },
   });
+  const users = usersPage?.users ?? [];
+  const pagination = usersPage?.pagination;
 
   const createUser = useMutation({
     mutationFn: async (payload: NewUserForm) => {
@@ -111,6 +120,20 @@ export default function UsersPage() {
         </div>
       </div>
 
+      <label className="block max-w-md text-sm">
+        <span className="sr-only">Search users</span>
+        <input
+          aria-label="Search users"
+          value={search}
+          onChange={(event) => {
+            setSearch(event.target.value);
+            setPage(1);
+          }}
+          placeholder="Search by name or email"
+          className="w-full rounded-md border border-gray-300 px-3 py-2 dark:border-gray-700 dark:bg-gray-800"
+        />
+      </label>
+
       {importResult && (
         <div className="flex items-center justify-between rounded-md bg-brand-50 px-3 py-2 text-sm text-brand-700 dark:bg-brand-950/40 dark:text-brand-300">
           {importResult}
@@ -185,6 +208,29 @@ export default function UsersPage() {
               ))}
             </tbody>
           </table>
+          <div className="flex items-center justify-between border-t border-gray-200 px-4 py-3 text-sm dark:border-gray-800">
+            <span>
+              Page {pagination?.page ?? page} of {pagination?.totalPages ?? 1} · {pagination?.total ?? users.length} users
+            </span>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setPage((value) => Math.max(1, value - 1))}
+                disabled={page <= 1}
+                className="rounded border px-3 py-1 disabled:opacity-40 dark:border-gray-700"
+              >
+                Previous
+              </button>
+              <button
+                type="button"
+                onClick={() => setPage((value) => value + 1)}
+                disabled={page >= (pagination?.totalPages ?? 1)}
+                className="rounded border px-3 py-1 disabled:opacity-40 dark:border-gray-700"
+              >
+                Next
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
