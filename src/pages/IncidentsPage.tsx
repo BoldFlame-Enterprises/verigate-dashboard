@@ -19,6 +19,7 @@ export default function IncidentsPage() {
       return res.data.data ?? [];
     },
     enabled: !!eventId,
+    refetchInterval: 10_000,
   });
 
   const { data: overrides, isLoading: overridesLoading, isError: overridesError } = useQuery({
@@ -28,6 +29,7 @@ export default function IncidentsPage() {
       return res.data.data ?? [];
     },
     enabled: !!eventId,
+    refetchInterval: 10_000,
   });
 
   const updateStatus = useMutation({
