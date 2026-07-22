@@ -32,6 +32,13 @@ interface Breakdown {
 }
 
 const COLORS = ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#0ea5e9', '#8b5cf6'];
+const LIVE_REFRESH_INTERVAL = 10_000;
+const TOOLTIP_STYLE = {
+  backgroundColor: 'rgba(17, 24, 39, 0.98)',
+  border: '1px solid #374151',
+  borderRadius: '0.75rem',
+  boxShadow: '0 12px 32px rgba(0, 0, 0, 0.28)',
+};
 
 export default function AnalyticsPage() {
   const { selectedEvent } = useEvent();
@@ -44,6 +51,7 @@ export default function AnalyticsPage() {
       return res.data.data!;
     },
     enabled: !!eventId,
+    refetchInterval: LIVE_REFRESH_INTERVAL,
   });
 
   const { data: breakdown, isLoading: breakdownLoading, isError } = useQuery({
@@ -53,6 +61,7 @@ export default function AnalyticsPage() {
       return res.data.data!;
     },
     enabled: !!eventId,
+    refetchInterval: LIVE_REFRESH_INTERVAL,
   });
 
   const handleExport = () => {
@@ -75,11 +84,12 @@ export default function AnalyticsPage() {
 
   const hourlyData = volume.hourly.map((row) => ({
     time: new Date(row.bucket).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric' }),
-    Granted: row.granted,
-    Denied: row.denied,
+    Granted: Number(row.granted),
+    Denied: Number(row.denied),
   }));
 
   const accessLevelPie = breakdown.by_access_level.map((l) => ({ name: l.name, value: l.assigned_users }));
+  const maxHourlyScans = Math.max(1, ...hourlyData.map((row) => row.Granted + row.Denied));
 
   return (
     <div className="space-y-6">
@@ -110,19 +120,48 @@ export default function AnalyticsPage() {
       </div>
 
       <div className="rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900">
-        <h2 className="mb-3 font-semibold">Scan volume (last 48h)</h2>
+        <div className="mb-4">
+          <h2 className="font-semibold">Scan volume (last 48h)</h2>
+          <p className="text-xs text-gray-500 dark:text-gray-400">Hourly granted and denied scans · refreshes every 10s</p>
+        </div>
         {hourlyData.length === 0 ? (
           <EmptyState title="No scans in the last 48 hours" />
         ) : (
           <ResponsiveContainer width="100%" height={280}>
-            <BarChart data={hourlyData}>
-              <CartesianGrid strokeDasharray="3 3" className="stroke-gray-200 dark:stroke-gray-800" />
-              <XAxis dataKey="time" tick={{ fontSize: 12 }} />
-              <YAxis tick={{ fontSize: 12 }} allowDecimals={false} />
-              <Tooltip />
-              <Legend />
-              <Bar dataKey="Granted" stackId="a" fill="#10b981" radius={[4, 4, 0, 0]} />
-              <Bar dataKey="Denied" stackId="a" fill="#ef4444" radius={[4, 4, 0, 0]} />
+            <BarChart data={hourlyData} margin={{ top: 8, right: 8, left: -12, bottom: 0 }} barCategoryGap="35%">
+              <defs>
+                <linearGradient id="grantedGradient" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#34d399" />
+                  <stop offset="100%" stopColor="#059669" />
+                </linearGradient>
+                <linearGradient id="deniedGradient" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#fb7185" />
+                  <stop offset="100%" stopColor="#dc2626" />
+                </linearGradient>
+              </defs>
+              <CartesianGrid vertical={false} strokeDasharray="4 6" className="stroke-gray-200 dark:stroke-gray-700" />
+              <XAxis
+                dataKey="time"
+                tick={{ fill: '#94a3b8', fontSize: 12 }}
+                tickLine={false}
+                axisLine={{ stroke: '#475569', strokeOpacity: 0.45 }}
+              />
+              <YAxis
+                tick={{ fill: '#94a3b8', fontSize: 12 }}
+                tickLine={false}
+                axisLine={false}
+                allowDecimals={false}
+                domain={[0, maxHourlyScans]}
+                tickCount={Math.min(maxHourlyScans + 1, 6)}
+              />
+              <Tooltip
+                cursor={{ fill: '#64748b', fillOpacity: 0.12 }}
+                contentStyle={TOOLTIP_STYLE}
+                labelStyle={{ color: '#f8fafc', fontWeight: 600 }}
+              />
+              <Legend iconType="circle" iconSize={8} wrapperStyle={{ paddingTop: 12 }} />
+              <Bar dataKey="Granted" stackId="a" fill="url(#grantedGradient)" maxBarSize={56} radius={[5, 5, 0, 0]} />
+              <Bar dataKey="Denied" stackId="a" fill="url(#deniedGradient)" maxBarSize={56} radius={[5, 5, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         )}
@@ -141,7 +180,7 @@ export default function AnalyticsPage() {
                     <Cell key={idx} fill={COLORS[idx % COLORS.length]} />
                   ))}
                 </Pie>
-                <Tooltip />
+                <Tooltip contentStyle={TOOLTIP_STYLE} labelStyle={{ color: '#f8fafc', fontWeight: 600 }} />
                 <Legend />
               </PieChart>
             </ResponsiveContainer>

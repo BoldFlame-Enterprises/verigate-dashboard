@@ -20,7 +20,7 @@ export default function DashboardPage() {
       return res.data.data!;
     },
     enabled: !!selectedEvent,
-    refetchInterval: 15_000,
+    refetchInterval: 10_000,
   });
 
   if (!selectedEvent) {
@@ -33,7 +33,7 @@ export default function DashboardPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-semibold">{selectedEvent.name}</h1>
-        <p className="text-sm text-gray-500 dark:text-gray-400">Live overview, refreshes every 15s</p>
+        <p className="text-sm text-gray-500 dark:text-gray-400">Live overview, refreshes every 10s</p>
       </div>
 
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
