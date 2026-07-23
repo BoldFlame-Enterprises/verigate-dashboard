@@ -9,7 +9,7 @@ The admin web dashboard for the VeriGate Access Control system.
 - **User management**: server-driven search/pagination, CRUD, deactivate, and bulk CSV import/export.
 - **Access & area configuration**: CRUD for access levels and areas, plus assignment management.
 - **Analytics**: scan-volume-over-time and grant/deny/area/access-level/scanner breakdown charts (Recharts), backed by cached backend aggregate endpoints, with CSV export of the raw scan log.
-- **Real-time sync monitoring**: each device's (pass/scan) last-sync time and online/stale/offline status.
+- **Polling-based sync monitoring**: active views refetch approximately every 10 seconds to show each device's last-sync time and online/stale/offline status. “Live” means polling, not a socket stream; dashboard/analytics backend data uses five-second cache windows retained for 15 seconds.
 - **Incident & override review**: incident reports and emergency overrides filed from the scan app, reviewable/resolvable here.
 
 ## 🛠️ Tech Stack
@@ -29,4 +29,6 @@ For Vercel, configure `VITE_API_URL` as a project environment variable for Produ
 - `npm run preview`: Preview the production build.
 - `npm run lint`: Lint.
 - `npm run type-check`: Validate TypeScript types with no emit.
-- `npm test`: Run the user-directory and assignment-picker component tests.
+- `npm test`: Run the committed dashboard component tests.
+
+Static tests and builds do not prove authenticated browser operation against a hosted backend or a production CORS configuration.
