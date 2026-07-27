@@ -13,7 +13,9 @@ const {
   apiGetMock: vi.fn(),
   invalidateQueriesMock: vi.fn(),
   mutateMock: vi.fn(),
-  mutationOptions: [] as Array<Record<string, any>>,
+  mutationOptions: [] as Array<{
+    onError?: (error: unknown, input: unknown) => Promise<void> | void;
+  }>,
   useMutationMock: vi.fn(),
   useQueryMock: vi.fn(),
 }));
@@ -192,7 +194,7 @@ describe('IncidentsPage reviewed operational interactions', () => {
     render(<IncidentsPage />);
     const actionMutation = mutationOptions[0];
 
-    await actionMutation.onError(
+    await actionMutation.onError?.(
       { response: { status: 409 } },
       { kind: 'incident', id: 1, action: 'resolve', expectedVersion: 2, note: 'Done' }
     );

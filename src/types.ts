@@ -151,7 +151,14 @@ export interface Incident {
   category: string;
   description: string;
   status: 'open' | 'reviewing' | 'resolved' | 'dismissed';
+  assigned_to: number | null;
+  assigned_to_name: string | null;
+  decision_by: number | null;
+  decision_by_name: string | null;
+  decision_note: string | null;
+  version: number;
   created_at: string;
+  updated_at: string;
   resolved_at: string | null;
 }
 
@@ -166,7 +173,39 @@ export interface EmergencyOverride {
   scanner_name: string | null;
   access_granted: boolean;
   reason: string;
+  review_status: 'pending' | 'reviewing' | 'reviewed';
+  review_outcome: 'justified' | 'rejected' | 'follow_up_required' | null;
+  assigned_to: number | null;
+  assigned_to_name: string | null;
+  decision_note: string | null;
+  legacy_outcome_unknown: boolean;
+  version: number;
   created_at: string;
+  updated_at: string;
   reviewed_at: string | null;
   reviewed_by: number | null;
+  reviewed_by_name: string | null;
+}
+
+export interface CaseAdministrator {
+  id: number;
+  name: string;
+  email: string;
+  administration_scope: 'global' | 'event';
+}
+
+export interface OperationalCaseActivity {
+  id: number;
+  action: string;
+  previous_status: string | null;
+  new_status: string;
+  previous_outcome?: string | null;
+  new_outcome?: string | null;
+  previous_assigned_to: number | null;
+  new_assigned_to: number | null;
+  actor_user_id: number;
+  actor_name: string | null;
+  note: string | null;
+  version: number;
+  created_at: string;
 }
