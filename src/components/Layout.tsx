@@ -39,8 +39,8 @@ export default function Layout() {
     <div className="flex h-screen overflow-hidden">
       <aside className="flex w-64 flex-shrink-0 flex-col border-r border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900">
         <div className="flex items-center gap-2 border-b border-gray-200 px-5 py-4 dark:border-gray-800">
-          <ShieldCheck className="h-6 w-6 text-brand-600" />
-          <span className="text-lg font-semibold">VeriGate</span>
+          <ShieldCheck className="h-6 w-6 text-brand-600 dark:text-brand-400" />
+          <span className="text-lg font-semibold tracking-tight">VeriGate</span>
         </div>
         <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4">
           {navItems
@@ -56,7 +56,7 @@ export default function Layout() {
                 className={({ isActive }) =>
                   `flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
                     isActive
-                      ? 'bg-brand-50 text-brand-700 dark:bg-brand-950/50 dark:text-brand-400'
+                      ? 'bg-brand-50 text-brand-700 dark:bg-brand-500/15 dark:text-brand-200'
                       : 'text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800'
                   }`
                 }
@@ -69,7 +69,7 @@ export default function Layout() {
         <div className="border-t border-gray-200 p-3 dark:border-gray-800">
           <button
             onClick={logout}
-            className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800"
+            className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-brand-500 dark:text-gray-300 dark:hover:bg-gray-800"
           >
             <LogOut className="h-4 w-4" />
             Sign out
@@ -87,7 +87,7 @@ export default function Layout() {
               id="event-select"
               value={selectedEvent?.id ?? ''}
               onChange={(e) => selectEvent(Number(e.target.value))}
-              className="rounded-md border border-gray-300 bg-white px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800"
+              className="rounded-md border border-gray-300 bg-white px-2 py-1 text-sm text-gray-900 outline-none transition-colors focus:border-brand-500 focus:ring-2 focus:ring-brand-500/25 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
             >
               {events.length === 0 && <option value="">No events yet</option>}
               {events.map((event) => (
