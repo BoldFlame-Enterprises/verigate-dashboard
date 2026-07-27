@@ -18,6 +18,7 @@ import {
 import LoadingSpinner from '../components/LoadingSpinner';
 import ErrorState from '../components/ErrorState';
 import EmptyState from '../components/EmptyState';
+import Tooltip from '../components/Tooltip';
 
 type DeviceAction = 'deregister' | 'blacklist' | 'unblacklist';
 
@@ -176,14 +177,16 @@ export default function SyncMonitorPage() {
           className="flex items-start justify-between gap-3 rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:bg-amber-950/40 dark:text-amber-200"
         >
           <span>{feedback}</span>
-          <button
-            type="button"
-            aria-label="Dismiss message"
-            onClick={() => setFeedback(null)}
-            className="rounded-md p-1 hover:bg-amber-100 focus:outline-none focus:ring-2 focus:ring-amber-600 dark:hover:bg-amber-900"
-          >
-            <X className="h-4 w-4" />
-          </button>
+          <Tooltip content="Dismiss message">
+            <button
+              type="button"
+              aria-label="Dismiss message"
+              onClick={() => setFeedback(null)}
+              className="rounded-md p-1 hover:bg-amber-100 focus:outline-none focus:ring-2 focus:ring-amber-600 dark:hover:bg-amber-900"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </Tooltip>
         </div>
       )}
 
@@ -253,42 +256,50 @@ export default function SyncMonitorPage() {
                     </td>
                     <td className="px-4 py-4">
                       <div className="flex justify-end gap-2">
-                        <button
-                          type="button"
-                          aria-label="View device history"
-                          onClick={() => setHistoryRegistration(registration)}
-                          className="rounded-md border border-gray-300 p-2 text-gray-600 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-brand-600 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800"
-                        >
-                          <History className="h-4 w-4" />
-                        </button>
-                        {registration.state === 'active' && (
+                        <Tooltip content="View authority history">
                           <button
                             type="button"
-                            aria-label="Deregister device"
-                            onClick={() => openAction(registration, 'deregister')}
-                            className="rounded-md border border-amber-300 p-2 text-amber-700 hover:bg-amber-50 focus:outline-none focus:ring-2 focus:ring-amber-600 dark:border-amber-800 dark:text-amber-300 dark:hover:bg-amber-950"
+                            aria-label="View device history"
+                            onClick={() => setHistoryRegistration(registration)}
+                            className="rounded-md border border-gray-300 p-2 text-gray-600 transition-colors hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-brand-600 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800"
                           >
-                            <LogOut className="h-4 w-4" />
+                            <History className="h-4 w-4" />
                           </button>
+                        </Tooltip>
+                        {registration.state === 'active' && (
+                          <Tooltip content="Sign this device out">
+                            <button
+                              type="button"
+                              aria-label="Deregister device"
+                              onClick={() => openAction(registration, 'deregister')}
+                              className="rounded-md border border-amber-300 p-2 text-amber-700 transition-colors hover:bg-amber-50 focus:outline-none focus:ring-2 focus:ring-amber-600 dark:border-amber-800 dark:text-amber-300 dark:hover:bg-amber-950"
+                            >
+                              <LogOut className="h-4 w-4" />
+                            </button>
+                          </Tooltip>
                         )}
                         {registration.state !== 'blacklisted' ? (
-                          <button
-                            type="button"
-                            aria-label="Blacklist device"
-                            onClick={() => openAction(registration, 'blacklist')}
-                            className="rounded-md border border-red-300 p-2 text-red-700 hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-600 dark:border-red-800 dark:text-red-300 dark:hover:bg-red-950"
-                          >
-                            <Ban className="h-4 w-4" />
-                          </button>
+                          <Tooltip content="Block future registration">
+                            <button
+                              type="button"
+                              aria-label="Blacklist device"
+                              onClick={() => openAction(registration, 'blacklist')}
+                              className="rounded-md border border-red-300 p-2 text-red-700 transition-colors hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-600 dark:border-red-800 dark:text-red-300 dark:hover:bg-red-950"
+                            >
+                              <Ban className="h-4 w-4" />
+                            </button>
+                          </Tooltip>
                         ) : (
-                          <button
-                            type="button"
-                            aria-label="Remove device from blacklist"
-                            onClick={() => openAction(registration, 'unblacklist')}
-                            className="rounded-md border border-amber-300 p-2 text-amber-700 hover:bg-amber-50 focus:outline-none focus:ring-2 focus:ring-amber-600 dark:border-amber-800 dark:text-amber-300 dark:hover:bg-amber-950"
-                          >
-                            <RotateCcw className="h-4 w-4" />
-                          </button>
+                          <Tooltip content="Allow registration again">
+                            <button
+                              type="button"
+                              aria-label="Remove device from blacklist"
+                              onClick={() => openAction(registration, 'unblacklist')}
+                              className="rounded-md border border-amber-300 p-2 text-amber-700 transition-colors hover:bg-amber-50 focus:outline-none focus:ring-2 focus:ring-amber-600 dark:border-amber-800 dark:text-amber-300 dark:hover:bg-amber-950"
+                            >
+                              <RotateCcw className="h-4 w-4" />
+                            </button>
+                          </Tooltip>
                         )}
                       </div>
                     </td>
@@ -369,14 +380,16 @@ export default function SyncMonitorPage() {
                 Immutable authority changes for {historyRegistration.installation_id}
               </p>
             </div>
-            <button
-              type="button"
-              aria-label="Close device history"
-              onClick={() => setHistoryRegistration(null)}
-              className="rounded-md p-2 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-brand-600 dark:hover:bg-gray-800"
-            >
-              <X className="h-4 w-4" />
-            </button>
+            <Tooltip content="Close history">
+              <button
+                type="button"
+                aria-label="Close device history"
+                onClick={() => setHistoryRegistration(null)}
+                className="rounded-md p-2 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-brand-600 dark:hover:bg-gray-800"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </Tooltip>
           </div>
           {history.isLoading ? (
             <div className="py-6"><LoadingSpinner /></div>

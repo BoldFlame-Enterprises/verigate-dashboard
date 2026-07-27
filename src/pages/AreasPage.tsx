@@ -8,6 +8,7 @@ import { Area } from '../types';
 import LoadingSpinner from '../components/LoadingSpinner';
 import ErrorState from '../components/ErrorState';
 import EmptyState from '../components/EmptyState';
+import Tooltip from '../components/Tooltip';
 
 export default function AreasPage() {
   const { selectedEvent } = useEvent();
@@ -70,7 +71,16 @@ export default function AreasPage() {
         <div className="rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900">
           <div className="mb-3 flex items-center justify-between">
             <h2 className="font-semibold">New area</h2>
-            <button onClick={() => setShowForm(false)}><X className="h-4 w-4" /></button>
+            <Tooltip content="Close area form">
+              <button
+                type="button"
+                aria-label="Close area form"
+                onClick={() => setShowForm(false)}
+                className="rounded-md p-2 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-500 dark:hover:bg-gray-800 dark:hover:text-gray-100"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </Tooltip>
           </div>
           <form
             onSubmit={(e) => {
@@ -121,9 +131,16 @@ export default function AreasPage() {
                   </td>
                   <td className="px-4 py-2 text-right">
                     {a.is_active && (
-                      <button onClick={() => deactivateArea.mutate(a.id)} className="text-gray-400 hover:text-red-600">
-                        <Trash2 className="h-4 w-4" />
-                      </button>
+                      <Tooltip content="Deactivate area">
+                        <button
+                          type="button"
+                          aria-label={`Deactivate ${a.name}`}
+                          onClick={() => deactivateArea.mutate(a.id)}
+                          className="rounded-md p-2 text-gray-500 transition-colors hover:bg-red-50 hover:text-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 dark:hover:bg-red-950/40 dark:hover:text-red-300"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </Tooltip>
                     )}
                   </td>
                 </tr>
