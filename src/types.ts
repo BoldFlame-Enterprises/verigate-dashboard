@@ -30,7 +30,14 @@ export interface Event {
   is_active: boolean;
   created_at: string;
   updated_at: string;
+  role_in_event?: string;
+  administration_scope?: 'global' | 'event' | 'none';
+  capabilities?: EventCapability[];
 }
+
+export type EventCapability =
+  | 'manage_event_devices'
+  | 'manage_operational_cases';
 
 export interface AccessLevel {
   id: number;
@@ -94,16 +101,44 @@ export interface DashboardData {
   device_activity: { scanner_user_id: number; scanner_name: string | null; last_scan_at: string; scan_count: number }[];
 }
 
-export interface DeviceSyncStatus {
-  device_id: string;
+export interface DeviceRegistration {
+  id: number;
+  event_id: number;
+  user_id: number;
+  user_name: string;
+  user_email: string;
   app: 'pass' | 'scan';
+  installation_id: string;
   platform: string | null;
+  state: 'active' | 'deregistered' | 'blacklisted';
+  session_generation: number;
+  version: number;
+  registered_at: string;
+  last_seen_at: string | null;
   last_sync_at: string | null;
   last_scan_upload_at: string | null;
   local_db_version: number | null;
-  user_name: string | null;
-  status: 'online' | 'stale' | 'offline' | 'unknown';
-  seconds_since_sync: number | null;
+  app_version: string | null;
+  state_changed_at: string;
+  state_changed_by: number | null;
+  state_reason: string | null;
+  audit_upload_until: string | null;
+  updated_at: string;
+  sync_status: 'online' | 'stale' | 'offline' | 'unknown';
+}
+
+export interface DeviceRegistrationAction {
+  id: number;
+  registration_id: number;
+  event_id: number;
+  action: string;
+  previous_state: DeviceRegistration['state'] | null;
+  new_state: DeviceRegistration['state'];
+  actor_user_id: number | null;
+  actor_email: string | null;
+  reason: string | null;
+  session_generation: number;
+  created_at: string;
 }
 
 export interface Incident {

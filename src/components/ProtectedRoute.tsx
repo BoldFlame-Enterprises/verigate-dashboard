@@ -1,12 +1,24 @@
 import { Navigate, Outlet } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { UserRole } from '../types';
+import { useEvent } from '../context/EventContext';
+import { EventCapability, UserRole } from '../types';
 import LoadingSpinner from './LoadingSpinner';
 
-export default function ProtectedRoute({ allowedRoles }: { allowedRoles?: UserRole[] }) {
-  const { user, isLoading } = useAuth();
+interface ProtectedRouteProps {
+  allowedRoles?: UserRole[];
+  requiredCapabilities?: EventCapability[];
+  capabilityScope?: 'selected' | 'any';
+}
 
-  if (isLoading) {
+export default function ProtectedRoute({
+  allowedRoles,
+  requiredCapabilities,
+  capabilityScope = 'selected',
+}: ProtectedRouteProps) {
+  const { user, isLoading } = useAuth();
+  const eventContext = useEvent();
+
+  if (isLoading || eventContext.isLoading) {
     return (
       <div className="flex h-screen items-center justify-center">
         <LoadingSpinner />
@@ -18,12 +30,22 @@ export default function ProtectedRoute({ allowedRoles }: { allowedRoles?: UserRo
     return <Navigate to="/login" replace />;
   }
 
-  if (allowedRoles && !allowedRoles.includes(user.role)) {
+  const roleAllowed = allowedRoles?.includes(user.role) ?? false;
+  const capabilityAllowed = requiredCapabilities
+    ? capabilityScope === 'any'
+      ? eventContext.hasAnyEventCapability(requiredCapabilities)
+      : requiredCapabilities.some(eventContext.hasCapability)
+    : false;
+  const hasAccess = !allowedRoles && !requiredCapabilities
+    ? true
+    : roleAllowed || capabilityAllowed;
+
+  if (!hasAccess) {
     return (
       <div className="flex h-screen flex-col items-center justify-center gap-2 text-center">
-        <p className="text-lg font-semibold">This dashboard is for event admins only</p>
+        <p className="text-lg font-semibold">This operation is not available for your event access</p>
         <p className="max-w-sm text-sm text-gray-500 dark:text-gray-400">
-          Your account role is "{user.role}". Scanners and attendees use the VeriGate mobile apps instead.
+          Select an event where you are an administrator, or ask a global administrator to update your membership.
         </p>
       </div>
     );

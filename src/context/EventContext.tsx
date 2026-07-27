@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useState, ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api, APIResponse } from '../lib/api';
-import { Event } from '../types';
+import { Event, EventCapability } from '../types';
 import { useAuth } from './AuthContext';
 
 interface EventContextValue {
@@ -9,6 +9,8 @@ interface EventContextValue {
   selectedEvent: Event | null;
   selectEvent: (eventId: number) => void;
   isLoading: boolean;
+  hasCapability: (capability: EventCapability) => boolean;
+  hasAnyEventCapability: (capabilities: EventCapability[]) => boolean;
 }
 
 const EventContext = createContext<EventContextValue | undefined>(undefined);
@@ -47,9 +49,22 @@ export function EventProvider({ children }: { children: ReactNode }) {
   };
 
   const selectedEvent = events.find((e) => e.id === selectedEventId) ?? null;
+  const hasCapability = (capability: EventCapability) =>
+    selectedEvent?.capabilities?.includes(capability) ?? false;
+  const hasAnyEventCapability = (capabilities: EventCapability[]) =>
+    events.some((event) => capabilities.some(
+      (capability) => event.capabilities?.includes(capability)
+    ));
 
   return (
-    <EventContext.Provider value={{ events, selectedEvent, selectEvent, isLoading }}>
+    <EventContext.Provider value={{
+      events,
+      selectedEvent,
+      selectEvent,
+      isLoading,
+      hasCapability,
+      hasAnyEventCapability,
+    }}>
       {children}
     </EventContext.Provider>
   );

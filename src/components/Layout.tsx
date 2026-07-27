@@ -12,21 +12,28 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useEvent } from '../context/EventContext';
+import { EventCapability } from '../types';
 
-const navItems = [
-  { to: '/', label: 'Overview', icon: LayoutDashboard, roles: ['admin'] },
-  { to: '/users', label: 'Users', icon: Users, roles: ['admin'] },
-  { to: '/areas', label: 'Areas', icon: MapPin, roles: ['admin'] },
-  { to: '/access', label: 'Access & Assignments', icon: ShieldCheck, roles: ['admin'] },
-  { to: '/analytics', label: 'Analytics', icon: BarChart3, roles: ['admin'] },
-  { to: '/sync-monitor', label: 'Sync Monitor', icon: Radio, roles: ['admin'] },
-  { to: '/incidents', label: 'Incidents & Overrides', icon: AlertTriangle, roles: ['admin'] },
-  { to: '/events', label: 'Events', icon: CalendarDays, roles: ['admin'] },
+const navItems: Array<{
+  to: string;
+  label: string;
+  icon: typeof LayoutDashboard;
+  globalOnly?: boolean;
+  capability?: EventCapability;
+}> = [
+  { to: '/', label: 'Overview', icon: LayoutDashboard, globalOnly: true },
+  { to: '/users', label: 'Users', icon: Users, globalOnly: true },
+  { to: '/areas', label: 'Areas', icon: MapPin, globalOnly: true },
+  { to: '/access', label: 'Access & Assignments', icon: ShieldCheck, globalOnly: true },
+  { to: '/analytics', label: 'Analytics', icon: BarChart3, globalOnly: true },
+  { to: '/sync-monitor', label: 'Sync Monitor', icon: Radio, capability: 'manage_event_devices' },
+  { to: '/incidents', label: 'Incidents & Overrides', icon: AlertTriangle, capability: 'manage_operational_cases' },
+  { to: '/events', label: 'Events', icon: CalendarDays, globalOnly: true },
 ];
 
 export default function Layout() {
   const { user, logout } = useAuth();
-  const { events, selectedEvent, selectEvent } = useEvent();
+  const { events, selectedEvent, selectEvent, hasCapability } = useEvent();
 
   return (
     <div className="flex h-screen overflow-hidden">
@@ -37,7 +44,10 @@ export default function Layout() {
         </div>
         <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4">
           {navItems
-            .filter((item) => !user || item.roles.includes(user.role))
+            .filter((item) =>
+              user?.role === 'admin' ||
+              (!!item.capability && hasCapability(item.capability))
+            )
             .map((item) => (
               <NavLink
                 key={item.to}
@@ -88,7 +98,14 @@ export default function Layout() {
             </select>
           </div>
           <div className="text-sm text-gray-500 dark:text-gray-400">
-            {user?.name} <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs dark:bg-gray-800">{user?.role}</span>
+            {user?.name}{' '}
+            <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs dark:bg-gray-800">
+              {user?.role === 'admin'
+                ? 'global admin'
+                : selectedEvent?.administration_scope === 'event'
+                  ? 'event admin'
+                  : user?.role}
+            </span>
           </div>
         </header>
         <main className="flex-1 overflow-y-auto p-6">
