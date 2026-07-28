@@ -91,7 +91,20 @@ function installQueries(incidents = [incident()], overrides = [overrideCase()]) 
     if (queryKey[0] === 'overrides') return { data: overrides, isLoading: false, isError: false };
     if (queryKey[0] === 'case-administrators') {
       return {
-        data: [{ id: 11, name: 'Assigned Admin' }, { id: 22, name: 'Decision Admin' }],
+        data: [
+          {
+            id: 11,
+            name: 'Assigned Admin',
+            email: 'assigned@example.com',
+            administration_scope: 'event',
+          },
+          {
+            id: 22,
+            name: 'Decision Admin',
+            email: 'decision@example.com',
+            administration_scope: 'global',
+          },
+        ],
         isLoading: false,
         isError: false,
       };
@@ -174,6 +187,16 @@ describe('IncidentsPage reviewed operational interactions', () => {
     expect(screen.getAllByText('Assigned to Assigned Admin')).toHaveLength(2);
     expect(screen.getAllByText('Decided by Decision Admin')).toHaveLength(2);
     expect(screen.getByText('Outcome: Rejected')).toBeInTheDocument();
+  });
+
+  it('distinguishes global and event administrators when assigning ownership', () => {
+    render(<IncidentsPage />);
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Reassign' })[0]);
+
+    const assignee = screen.getByRole('combobox', { name: 'Event administrator' });
+    expect(assignee).toHaveTextContent('Assigned Admin — Event administrator');
+    expect(assignee).toHaveTextContent('Decision Admin — Global administrator');
   });
 
   it('keeps all reads event-qualified and polls only the selected event', async () => {

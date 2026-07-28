@@ -437,6 +437,7 @@ export default function IncidentsPage() {
                 Event administrator
                 <select
                   aria-label="Event administrator"
+                  aria-describedby="administrator-scope-help"
                   value={assigneeId}
                   onChange={(event) => setAssigneeId(event.target.value)}
                   className="mt-1 block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 dark:border-gray-700 dark:bg-gray-900"
@@ -444,10 +445,19 @@ export default function IncidentsPage() {
                   <option value="">Choose administrator</option>
                   {administrators.map((administrator) => (
                     <option key={administrator.id} value={administrator.id}>
-                      {administrator.name}
+                      {administrator.name} — {administrator.administration_scope === 'global'
+                        ? 'Global administrator'
+                        : 'Event administrator'}
                     </option>
                   ))}
                 </select>
+                <span
+                  id="administrator-scope-help"
+                  className="mt-1.5 block text-xs font-normal leading-5 text-gray-600 dark:text-gray-300"
+                >
+                  Global administrators can act across every event. Event administrators are
+                  limited to {selectedEvent.name}.
+                </span>
               </label>
             )}
             {draft.action === 'complete-review' && (
