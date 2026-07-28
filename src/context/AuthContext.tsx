@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, ReactNode, useCallback } from 'react';
-import { api, tokenStorage, APIResponse } from '../lib/api';
+import { api, bootstrapBrowserSession, tokenStorage, APIResponse } from '../lib/api';
 import { AuthUser } from '../types';
 
 interface AuthContextValue {
@@ -18,9 +18,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const loadMe = useCallback(async () => {
     try {
       if (!tokenStorage.getAccessToken()) {
-        const refresh = await api.post<APIResponse<{ accessToken: string }>>('/auth/refresh');
-        if (!refresh.data.data?.accessToken) throw new Error('No browser session');
-        tokenStorage.setTokens(refresh.data.data.accessToken);
+        const accessToken = await bootstrapBrowserSession();
+        if (!accessToken) throw new Error('No browser session');
       }
       const res = await api.get<APIResponse<AuthUser>>('/users/me');
       setUser(res.data.data ?? null);
@@ -37,7 +36,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [loadMe]);
 
   const login = async (email: string, password: string) => {
-    const res = await api.post<APIResponse<{ user: AuthUser; accessToken: string }>>('/auth/login', {
+    const res = await api.post<APIResponse<{
+      user: AuthUser;
+      accessToken: string;
+      csrfToken: string;
+    }>>('/auth/login', {
       email,
       password,
       client_kind: 'dashboard',
@@ -45,8 +48,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!res.data.success || !res.data.data) {
       throw new Error(res.data.error || 'Login failed');
     }
-    const { user: loggedInUser, accessToken } = res.data.data;
+    const { user: loggedInUser, accessToken, csrfToken } = res.data.data;
     tokenStorage.setTokens(accessToken);
+    tokenStorage.setCsrfToken(csrfToken);
     setUser(loggedInUser);
   };
 

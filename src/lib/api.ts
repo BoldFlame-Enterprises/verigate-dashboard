@@ -1,16 +1,22 @@
 import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
+import { coordinateSessionRefresh } from './sessionCoordinator';
 
 export const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
 
 let accessToken: string | null = null;
+let csrfToken: string | null = null;
 
 export const tokenStorage = {
   getAccessToken: () => accessToken,
   setTokens: (nextAccessToken: string, _refreshToken?: string) => {
     accessToken = nextAccessToken;
   },
+  setCsrfToken: (nextCsrfToken: string) => {
+    csrfToken = nextCsrfToken;
+  },
   clear: () => {
     accessToken = null;
+    csrfToken = null;
   },
 };
 
@@ -22,25 +28,50 @@ api.interceptors.request.use((config) => {
     config.headers = config.headers || {};
     config.headers.Authorization = `Bearer ${token}`;
   }
+  if (csrfToken) {
+    config.headers = config.headers || {};
+    config.headers['X-CSRF-Token'] = csrfToken;
+  }
   return config;
 });
 
 let refreshPromise: Promise<string | null> | null = null;
 
 async function refreshAccessToken(): Promise<string | null> {
+  const tokens = await coordinateSessionRefresh(async () => {
   try {
+    if (!csrfToken) {
+      const csrf = await axios.get(
+        `${API_BASE_URL}/auth/csrf`,
+        { withCredentials: true },
+      );
+      tokenStorage.setCsrfToken(csrf.data.data.csrfToken);
+    }
     const response = await axios.post(
       `${API_BASE_URL}/auth/refresh`,
       {},
-      { withCredentials: true },
+      {
+        withCredentials: true,
+        headers: { 'X-CSRF-Token': csrfToken },
+      },
     );
-    const { accessToken: nextAccessToken } = response.data.data;
+    const {
+      accessToken: nextAccessToken,
+      csrfToken: nextCsrfToken,
+    } = response.data.data;
     tokenStorage.setTokens(nextAccessToken);
-    return nextAccessToken;
+    tokenStorage.setCsrfToken(nextCsrfToken);
+    return { accessToken: nextAccessToken, csrfToken: nextCsrfToken };
   } catch {
     tokenStorage.clear();
     return null;
   }
+  });
+  if (tokens) {
+    tokenStorage.setTokens(tokens.accessToken);
+    tokenStorage.setCsrfToken(tokens.csrfToken);
+  }
+  return tokens?.accessToken ?? null;
 }
 
 api.interceptors.response.use(
@@ -70,6 +101,10 @@ api.interceptors.response.use(
     return Promise.reject(error);
   }
 );
+
+export async function bootstrapBrowserSession(): Promise<string | null> {
+  return refreshAccessToken();
+}
 
 export interface APIResponse<T = unknown> {
   success: boolean;
