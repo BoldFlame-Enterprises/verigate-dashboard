@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useState, ReactNode, useCallback } from 'react';
+import { useLocation } from 'react-router-dom';
 import { api, bootstrapBrowserSession, tokenStorage, APIResponse } from '../lib/api';
 import { AuthUser } from '../types';
 
@@ -10,10 +11,13 @@ interface AuthContextValue {
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
+const PUBLIC_AUTH_PATHS = new Set(['/login', '/activate', '/reset-password']);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  const { pathname } = useLocation();
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const isPublicAuthPath = PUBLIC_AUTH_PATHS.has(pathname);
 
   const loadMe = useCallback(async () => {
     try {
@@ -32,8 +36,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
+    if (isPublicAuthPath) {
+      setIsLoading(false);
+      return;
+    }
+    setIsLoading(true);
     loadMe();
-  }, [loadMe]);
+  }, [isPublicAuthPath, loadMe]);
 
   const login = async (email: string, password: string) => {
     const res = await api.post<APIResponse<{
