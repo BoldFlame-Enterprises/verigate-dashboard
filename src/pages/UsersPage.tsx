@@ -12,6 +12,7 @@ import {
 import { api, API_BASE_URL, tokenStorage, APIResponse } from '../lib/api';
 import { getErrorMessage } from '../lib/errors';
 import { Event, EventMembership, User, UserRole } from '../types';
+import { useEvent } from '../context/EventContext';
 import LoadingSpinner from '../components/LoadingSpinner';
 import ErrorState from '../components/ErrorState';
 import EmptyState from '../components/EmptyState';
@@ -45,8 +46,60 @@ function accountAuthority(user: User) {
   };
 }
 
+function eventAuthority(
+  user: User,
+  state: {
+    hasSelectedEvent: boolean;
+    isLoading: boolean;
+    isError: boolean;
+    isEventAdministrator: boolean;
+  }
+) {
+  if (user.role === 'admin') {
+    return {
+      label: 'Administrator via global role',
+      className: 'bg-brand-100 text-brand-800 dark:bg-brand-500/20 dark:text-brand-200',
+    };
+  }
+  if (!user.is_active) {
+    return {
+      label: 'Inactive account',
+      className: 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300',
+    };
+  }
+  if (!state.hasSelectedEvent) {
+    return {
+      label: 'No event selected',
+      className: 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300',
+    };
+  }
+  if (state.isLoading) {
+    return {
+      label: 'Checking access...',
+      className: 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300',
+    };
+  }
+  if (state.isError) {
+    return {
+      label: 'Access unavailable',
+      className: 'bg-amber-100 text-amber-800 dark:bg-amber-500/15 dark:text-amber-200',
+    };
+  }
+  if (state.isEventAdministrator) {
+    return {
+      label: 'Event administrator',
+      className: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-200',
+    };
+  }
+  return {
+    label: 'No admin access',
+    className: 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300',
+  };
+}
+
 export default function UsersPage() {
   const queryClient = useQueryClient();
+  const { selectedEvent } = useEvent();
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState<NewUserForm>(emptyForm);
   const [formError, setFormError] = useState<string | null>(null);
@@ -81,6 +134,31 @@ export default function UsersPage() {
   const pagination = usersPage?.pagination;
 
   const {
+    data: selectedEventMemberships = [],
+    isLoading: selectedEventMembershipsLoading,
+    isError: selectedEventMembershipsError,
+  } = useQuery({
+    queryKey: ['event-members', selectedEvent?.id],
+    queryFn: async () => {
+      const res = await api.get<APIResponse<EventMembership[]>>(
+        `/events/${selectedEvent!.id}/members`
+      );
+      return res.data.data ?? [];
+    },
+    enabled: selectedEvent !== null,
+  });
+  const selectedEventAdministratorIds = useMemo(
+    () => new Set(
+      selectedEventMemberships
+        .filter((membership) =>
+          membership.is_active && membership.role_in_event === 'admin'
+        )
+        .map((membership) => membership.user_id)
+    ),
+    [selectedEventMemberships]
+  );
+
+  const {
     data: events = [],
     isLoading: eventsLoading,
     isError: eventsError,
@@ -99,9 +177,9 @@ export default function UsersPage() {
   ) ?? null;
 
   const {
-    data: memberships = [],
-    isLoading: membershipsLoading,
-    isError: membershipsError,
+    data: dialogMemberships = [],
+    isLoading: dialogMembershipsLoading,
+    isError: dialogMembershipsError,
     refetch: refetchMemberships,
   } = useQuery({
     queryKey: ['event-members', selectedMembershipEventId],
@@ -114,7 +192,7 @@ export default function UsersPage() {
     enabled: accessUser !== null && selectedMembershipEventId !== null,
   });
 
-  const selectedUserMembership = memberships.find(
+  const selectedUserMembership = dialogMemberships.find(
     (membership) =>
       membership.user_id === accessUser?.id &&
       membership.is_active &&
@@ -403,12 +481,24 @@ export default function UsersPage() {
       ) : (
         <div className="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900">
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[720px] text-sm">
+            <table className="w-full min-w-[920px] text-sm">
               <thead className="bg-gray-50 text-left text-gray-500 dark:bg-gray-800/50 dark:text-gray-400">
                 <tr>
                   <th className="px-4 py-2">Name</th>
                   <th className="px-4 py-2">Email</th>
                   <th className="px-4 py-2">Account authority</th>
+                  <th
+                    aria-label={`Selected event authority ${selectedEvent?.name ?? 'No event selected'}`}
+                    className="px-4 py-2"
+                  >
+                    <span className="block">Selected event authority</span>
+                    <span
+                      className="block max-w-48 truncate text-xs font-normal text-gray-400 dark:text-gray-500"
+                      title={selectedEvent?.name ?? 'No event selected'}
+                    >
+                      {selectedEvent?.name ?? 'No event selected'}
+                    </span>
+                  </th>
                   <th className="px-4 py-2">Status</th>
                   <th className="px-4 py-2">
                     <span className="sr-only">Actions</span>
@@ -418,6 +508,12 @@ export default function UsersPage() {
               <tbody>
                 {users.map((u) => {
                   const authority = accountAuthority(u);
+                  const selectedEventAuthority = eventAuthority(u, {
+                    hasSelectedEvent: selectedEvent !== null,
+                    isLoading: selectedEventMembershipsLoading,
+                    isError: selectedEventMembershipsError,
+                    isEventAdministrator: selectedEventAdministratorIds.has(u.id),
+                  });
                   const statusClass = u.is_active
                     ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300'
                     : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300';
@@ -428,6 +524,13 @@ export default function UsersPage() {
                       <td className="px-4 py-2">
                         <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${authority.className}`}>
                           {authority.label}
+                        </span>
+                      </td>
+                      <td className="px-4 py-2">
+                        <span
+                          className={`rounded-full px-2 py-0.5 text-xs font-medium ${selectedEventAuthority.className}`}
+                        >
+                          {selectedEventAuthority.label}
                         </span>
                       </td>
                       <td className="px-4 py-2">
@@ -593,7 +696,7 @@ export default function UsersPage() {
                     </select>
                   </label>
 
-                  {membershipsError ? (
+                  {dialogMembershipsError ? (
                     <div>
                       <p role="alert" className="text-sm text-red-700 dark:text-red-300">
                         Current event access could not be loaded. No change has been made.
@@ -606,7 +709,7 @@ export default function UsersPage() {
                         Try again
                       </button>
                     </div>
-                  ) : membershipsLoading ? (
+                  ) : dialogMembershipsLoading ? (
                     <LoadingSpinner label="Checking event access..." />
                   ) : (
                     <div className="rounded-xl bg-gray-50 p-4 dark:bg-gray-800/70">

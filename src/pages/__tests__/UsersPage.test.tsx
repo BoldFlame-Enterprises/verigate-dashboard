@@ -15,6 +15,15 @@ vi.mock('../../lib/api', () => ({
   },
 }));
 
+vi.mock('../../context/EventContext', () => ({
+  useEvent: () => ({
+    selectedEvent: {
+      id: 7,
+      name: 'VeriGate Demo Event',
+    },
+  }),
+}));
+
 const users = Array.from({ length: 51 }, (_, index) => ({
   id: index + 1,
   name: `User ${index + 1}`,
@@ -165,7 +174,15 @@ describe('event administration membership management', () => {
 
     renderPage();
 
-    expect(await screen.findByText('Global administrator')).toBeInTheDocument();
+    expect(await screen.findByRole('columnheader', {
+      name: /selected event authority verigate demo event/i,
+    })).toBeInTheDocument();
+    const globalRow = screen.getByRole('row', { name: /global operator/i });
+    expect(within(globalRow).getByText('Global administrator')).toBeInTheDocument();
+    expect(within(globalRow).getByText('Administrator via global role')).toBeInTheDocument();
+    const eventAdministratorRow = screen.getByRole('row', { name: /event operator/i });
+    expect(within(eventAdministratorRow).getByText('Standard user')).toBeInTheDocument();
+    expect(await within(eventAdministratorRow).findByText('Event administrator')).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Event administration' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', {
       name: /manage global operator event administrator access/i,
@@ -188,6 +205,7 @@ describe('event administration membership management', () => {
   });
 
   it('grants event-administrator membership to an eligible active user', async () => {
+    let membershipGranted = false;
     vi.mocked(api.get).mockImplementation(async (path) => {
       if (path === '/users') {
         return {
@@ -202,13 +220,33 @@ describe('event administration membership management', () => {
         return { data: { success: true, data: [event] } } as never;
       }
       if (path === '/events/7/members') {
-        return { data: { success: true, data: [] } } as never;
+        return {
+          data: {
+            success: true,
+            data: membershipGranted ? [{
+              id: 12,
+              user_id: standardUser.id,
+              name: standardUser.name,
+              email: standardUser.email,
+              role: 'user',
+              role_in_event: 'admin',
+              is_active: true,
+              joined_at: '2026-01-02T00:00:00.000Z',
+            }] : [],
+          },
+        } as never;
       }
       throw new Error(`Unexpected GET ${path}`);
+    });
+    vi.mocked(api.post).mockImplementation(async () => {
+      membershipGranted = true;
+      return { data: { success: true, data: { id: 12 } } } as never;
     });
 
     renderPage();
 
+    const standardUserRow = await screen.findByRole('row', { name: /standard user/i });
+    expect(within(standardUserRow).getByText('No admin access')).toBeInTheDocument();
     fireEvent.click(await screen.findByRole('button', {
       name: /manage standard user event administrator access/i,
     }));
@@ -226,6 +264,7 @@ describe('event administration membership management', () => {
     expect(await screen.findByRole('status')).toHaveTextContent(
       /standard user can now administer verigate demo event/i
     );
+    expect(await within(standardUserRow).findByText('Event administrator')).toBeInTheDocument();
   });
 
   it('requires confirmation before removing event-administrator membership', async () => {
