@@ -1,12 +1,12 @@
-import { useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Download,
   Plus,
   ShieldCheck,
+  ShieldPlus,
   Trash2,
   Upload,
-  UserMinus,
   X,
 } from 'lucide-react';
 import { api, API_BASE_URL, tokenStorage, APIResponse } from '../lib/api';
@@ -55,11 +55,15 @@ export default function UsersPage() {
   const [activationToken, setActivationToken] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
+  const [accessUser, setAccessUser] = useState<User | null>(null);
   const [membershipEventId, setMembershipEventId] = useState<number | null>(null);
-  const [membershipUserId, setMembershipUserId] = useState('');
   const [membershipMessage, setMembershipMessage] = useState<string | null>(null);
   const [membershipError, setMembershipError] = useState<string | null>(null);
-  const [removalCandidate, setRemovalCandidate] = useState<EventMembership | null>(null);
+  const [confirmRemoval, setConfirmRemoval] = useState(false);
+  const accessTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const dialogRef = useRef<HTMLDivElement | null>(null);
+  const dialogCloseRef = useRef<HTMLButtonElement | null>(null);
+  const membershipMutationPendingRef = useRef(false);
 
   const { data: usersPage, isLoading, isError } = useQuery({
     queryKey: ['users', { page, search }],
@@ -87,6 +91,7 @@ export default function UsersPage() {
       const res = await api.get<APIResponse<Event[]>>('/events');
       return res.data.data ?? [];
     },
+    enabled: accessUser !== null,
   });
   const selectedMembershipEventId = membershipEventId ?? events[0]?.id ?? null;
   const selectedMembershipEvent = events.find(
@@ -106,31 +111,15 @@ export default function UsersPage() {
       );
       return res.data.data ?? [];
     },
-    enabled: selectedMembershipEventId !== null,
+    enabled: accessUser !== null && selectedMembershipEventId !== null,
   });
 
-  const eventAdministrators = useMemo(
-    () => memberships.filter(
-      (membership) =>
-        membership.is_active &&
-        membership.role_in_event === 'admin' &&
-        membership.role !== 'admin'
-    ),
-    [memberships]
-  );
-  const eventAdministratorIds = useMemo(
-    () => new Set(eventAdministrators.map((membership) => membership.user_id)),
-    [eventAdministrators]
-  );
-  const eligibleUsers = useMemo(
-    () => users.filter(
-      (user) =>
-        user.is_active &&
-        user.role === 'user' &&
-        !eventAdministratorIds.has(user.id)
-    ),
-    [eventAdministratorIds, users]
-  );
+  const selectedUserMembership = memberships.find(
+    (membership) =>
+      membership.user_id === accessUser?.id &&
+      membership.is_active &&
+      membership.role_in_event === 'admin'
+  ) ?? null;
 
   const createUser = useMutation({
     mutationFn: async (payload: NewUserForm) => {
@@ -153,20 +142,20 @@ export default function UsersPage() {
   });
 
   const grantEventAdministration = useMutation({
-    mutationFn: async (user: User) => {
-      if (selectedMembershipEventId === null) {
-        throw new Error('Choose an event before granting access.');
+    mutationFn: async () => {
+      if (!accessUser || selectedMembershipEventId === null) {
+        throw new Error('Choose a user and event before granting access.');
       }
       const res = await api.post<APIResponse<EventMembership>>(
         `/events/${selectedMembershipEventId}/members`,
-        { user_id: user.id, role_in_event: 'admin' }
+        { user_id: accessUser.id, role_in_event: 'admin' }
       );
       if (!res.data.success) throw new Error(res.data.error);
-      return user;
+      return accessUser;
     },
     onSuccess: (user) => {
       setMembershipError(null);
-      setMembershipUserId('');
+      setConfirmRemoval(false);
       setMembershipMessage(
         `${user.name} can now administer ${selectedMembershipEvent?.name ?? 'this event'}.`
       );
@@ -181,20 +170,20 @@ export default function UsersPage() {
   });
 
   const removeEventAdministration = useMutation({
-    mutationFn: async (membership: EventMembership) => {
-      if (selectedMembershipEventId === null) {
-        throw new Error('Choose an event before removing access.');
+    mutationFn: async () => {
+      if (!accessUser || !selectedUserMembership || selectedMembershipEventId === null) {
+        throw new Error('Choose an active event assignment before removing access.');
       }
       await api.delete(
-        `/events/${selectedMembershipEventId}/members/${membership.user_id}`
+        `/events/${selectedMembershipEventId}/members/${accessUser.id}`
       );
-      return membership;
+      return accessUser;
     },
-    onSuccess: (membership) => {
+    onSuccess: (user) => {
       setMembershipError(null);
-      setRemovalCandidate(null);
+      setConfirmRemoval(false);
       setMembershipMessage(
-        `${membership.name} no longer administers ${selectedMembershipEvent?.name ?? 'this event'}.`
+        `${user.name} no longer administers ${selectedMembershipEvent?.name ?? 'this event'}.`
       );
       queryClient.invalidateQueries({
         queryKey: ['event-members', selectedMembershipEventId],
@@ -205,6 +194,64 @@ export default function UsersPage() {
       setMembershipError(getErrorMessage(error));
     },
   });
+  const membershipMutationPending =
+    grantEventAdministration.isPending || removeEventAdministration.isPending;
+  membershipMutationPendingRef.current = membershipMutationPending;
+
+  const closeAccessDialog = useCallback(() => {
+    setAccessUser(null);
+    setMembershipEventId(null);
+    setMembershipMessage(null);
+    setMembershipError(null);
+    setConfirmRemoval(false);
+  }, []);
+
+  useEffect(() => {
+    if (!accessUser) return;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    dialogCloseRef.current?.focus();
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        if (!membershipMutationPendingRef.current) closeAccessDialog();
+        return;
+      }
+      if (event.key !== 'Tab' || !dialogRef.current) return;
+
+      const focusable = Array.from(dialogRef.current.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), select:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])'
+      ));
+      if (focusable.length === 0) return;
+
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener('keydown', handleKeyDown);
+      accessTriggerRef.current?.focus();
+    };
+  }, [accessUser, closeAccessDialog]);
+
+  const openAccessDialog = (user: User, trigger: HTMLButtonElement) => {
+    accessTriggerRef.current = trigger;
+    setMembershipEventId(null);
+    setMembershipMessage(null);
+    setMembershipError(null);
+    setConfirmRemoval(false);
+    setAccessUser(user);
+  };
 
   const handleExport = () => {
     const token = tokenStorage.getAccessToken();
@@ -230,10 +277,6 @@ export default function UsersPage() {
 
   if (isLoading) return <LoadingSpinner label="Loading users..." />;
   if (isError) return <ErrorState />;
-
-  const selectedMembershipUser = eligibleUsers.find(
-    (user) => user.id === Number(membershipUserId)
-  );
 
   return (
     <div className="space-y-6">
@@ -344,7 +387,7 @@ export default function UsersPage() {
             {form.role === 'admin' && (
               <p className="col-span-2 text-sm text-brand-700 dark:text-brand-200">
                 Global administrators can manage every event. For event-limited access, create a
-                standard user and use Event administration below.
+                standard user, then use the shield action in the user directory.
               </p>
             )}
             <button type="submit" disabled={createUser.isPending} className="rounded-md bg-brand-600 px-3 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-60">
@@ -354,228 +397,6 @@ export default function UsersPage() {
           </form>
         </div>
       )}
-
-      <section
-        aria-labelledby="event-administration-heading"
-        className="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900"
-      >
-        <div className="border-b border-gray-200 px-4 py-4 dark:border-gray-800 sm:px-5">
-          <div className="flex items-start gap-3">
-            <span className="rounded-lg bg-brand-100 p-2 text-brand-700 dark:bg-brand-500/20 dark:text-brand-200">
-              <ShieldCheck className="h-5 w-5" aria-hidden="true" />
-            </span>
-            <div>
-              <h2 id="event-administration-heading" className="font-semibold">
-                Event administration
-              </h2>
-              <p className="mt-1 max-w-2xl text-sm text-gray-600 dark:text-gray-300">
-                Grant operational dashboard access for one event without creating another global
-                administrator.
-              </p>
-            </div>
-          </div>
-          <p className="mt-3 text-sm text-brand-800 dark:text-brand-200">
-            Global administrators automatically administer every event and are not listed as
-            event-scoped assignments.
-          </p>
-        </div>
-
-        {eventsError ? (
-          <div className="px-4 py-5 sm:px-5">
-            <p role="alert" className="text-sm text-red-700 dark:text-red-300">
-              Events could not be loaded.
-            </p>
-            <button
-              type="button"
-              onClick={() => refetchEvents()}
-              className="mt-2 text-sm font-medium text-brand-700 hover:underline dark:text-brand-200"
-            >
-              Try again
-            </button>
-          </div>
-        ) : eventsLoading ? (
-          <div className="px-4 py-5 sm:px-5">
-            <LoadingSpinner label="Loading event administration..." />
-          </div>
-        ) : events.length === 0 ? (
-          <p className="px-4 py-5 text-sm text-gray-600 dark:text-gray-300 sm:px-5">
-            Create an event before assigning an event administrator.
-          </p>
-        ) : (
-          <div className="grid lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
-            <div className="space-y-4 border-b border-gray-200 p-4 dark:border-gray-800 sm:p-5 lg:border-b-0 lg:border-r">
-              <label className="block text-sm font-medium">
-                Event
-                <select
-                  aria-label="Event to administer"
-                  value={selectedMembershipEventId ?? ''}
-                  onChange={(event) => {
-                    setMembershipEventId(Number(event.target.value));
-                    setMembershipUserId('');
-                    setMembershipMessage(null);
-                    setMembershipError(null);
-                    setRemovalCandidate(null);
-                  }}
-                  className="mt-1.5 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/25 dark:border-gray-700 dark:bg-gray-800"
-                >
-                  {events.map((event) => (
-                    <option key={event.id} value={event.id}>
-                      {event.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <label className="block text-sm font-medium">
-                Person to grant access
-                <select
-                  aria-label="Person to grant access"
-                  value={membershipUserId}
-                  onChange={(event) => setMembershipUserId(event.target.value)}
-                  disabled={membershipsLoading || eligibleUsers.length === 0}
-                  className="mt-1.5 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/25 disabled:cursor-not-allowed disabled:opacity-60 dark:border-gray-700 dark:bg-gray-800"
-                >
-                  <option value="">
-                    {eligibleUsers.length === 0
-                      ? 'No eligible users on this page'
-                      : 'Choose an active standard user'}
-                  </option>
-                  {eligibleUsers.map((user) => (
-                    <option key={user.id} value={user.id}>
-                      {user.name} · {user.email}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <button
-                type="button"
-                onClick={() => {
-                  if (!selectedMembershipUser) return;
-                  setMembershipError(null);
-                  setMembershipMessage(null);
-                  grantEventAdministration.mutate(selectedMembershipUser);
-                }}
-                disabled={!selectedMembershipUser || grantEventAdministration.isPending}
-                className="w-full rounded-md bg-brand-600 px-3 py-2 text-sm font-medium text-white hover:bg-brand-700 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 dark:focus:ring-offset-gray-900"
-              >
-                {grantEventAdministration.isPending
-                  ? 'Granting access...'
-                  : 'Grant event administrator access'}
-              </button>
-              <p className="text-xs leading-5 text-gray-500 dark:text-gray-400">
-                Search or change pages in the user directory below to find another eligible person.
-              </p>
-            </div>
-
-            <div className="min-w-0 p-4 sm:p-5">
-              <div className="flex items-center justify-between gap-3">
-                <h3 className="font-medium">
-                  Assigned to {selectedMembershipEvent?.name}
-                </h3>
-                <span className="shrink-0 text-xs text-gray-500 dark:text-gray-400">
-                  {eventAdministrators.length}{' '}
-                  {eventAdministrators.length === 1 ? 'administrator' : 'administrators'}
-                </span>
-              </div>
-
-              {membershipsError ? (
-                <div className="mt-4">
-                  <p role="alert" className="text-sm text-red-700 dark:text-red-300">
-                    Event administrators could not be loaded.
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => refetchMemberships()}
-                    className="mt-2 text-sm font-medium text-brand-700 hover:underline dark:text-brand-200"
-                  >
-                    Try again
-                  </button>
-                </div>
-              ) : membershipsLoading ? (
-                <div className="mt-4">
-                  <LoadingSpinner label="Loading event administrators..." />
-                </div>
-              ) : eventAdministrators.length === 0 ? (
-                <p className="mt-4 text-sm text-gray-600 dark:text-gray-300">
-                  No event administrators are assigned yet.
-                </p>
-              ) : (
-                <ul className="mt-3 divide-y divide-gray-100 dark:divide-gray-800">
-                  {eventAdministrators.map((membership) => (
-                    <li key={membership.id} className="py-3">
-                      <div className="flex min-w-0 items-center justify-between gap-3">
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-medium">{membership.name}</p>
-                          <p className="truncate text-xs text-gray-500 dark:text-gray-400">
-                            {membership.email}
-                          </p>
-                        </div>
-                        <div className="flex shrink-0 items-center gap-2">
-                          <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-200">
-                            Event administrator
-                          </span>
-                          <Tooltip content="Remove event administrator access">
-                            <button
-                              type="button"
-                              aria-label={`Remove ${membership.name} event access`}
-                              onClick={() => setRemovalCandidate(membership)}
-                              disabled={removeEventAdministration.isPending}
-                              className="rounded-md p-2 text-red-600 hover:bg-red-50 hover:text-red-800 focus:outline-none focus:ring-2 focus:ring-red-500 disabled:opacity-50 dark:text-red-300 dark:hover:bg-red-950/40 dark:hover:text-red-200"
-                            >
-                              <UserMinus className="h-4 w-4" aria-hidden="true" />
-                            </button>
-                          </Tooltip>
-                        </div>
-                      </div>
-
-                      {removalCandidate?.id === membership.id && (
-                        <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-900 dark:bg-red-950/40 dark:text-red-100">
-                          <span>Remove this person’s access to {selectedMembershipEvent?.name}?</span>
-                          <div className="flex gap-2">
-                            <button
-                              type="button"
-                              onClick={() => setRemovalCandidate(null)}
-                              className="rounded-md px-2 py-1 font-medium hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-red-500 dark:hover:bg-red-900/50"
-                            >
-                              Cancel
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => removeEventAdministration.mutate(membership)}
-                              disabled={removeEventAdministration.isPending}
-                              className="rounded-md bg-red-700 px-2 py-1 font-medium text-white hover:bg-red-800 focus:outline-none focus:ring-2 focus:ring-red-500 disabled:opacity-60"
-                            >
-                              {removeEventAdministration.isPending
-                                ? 'Removing...'
-                                : 'Confirm removal'}
-                            </button>
-                          </div>
-                        </div>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          </div>
-        )}
-
-        {(membershipMessage || membershipError) && (
-          <div className="border-t border-gray-200 px-4 py-3 dark:border-gray-800 sm:px-5">
-            {membershipMessage && (
-              <p role="status" className="text-sm text-emerald-700 dark:text-emerald-300">
-                {membershipMessage}
-              </p>
-            )}
-            {membershipError && (
-              <p role="alert" className="text-sm text-red-700 dark:text-red-300">
-                {membershipError}
-              </p>
-            )}
-          </div>
-        )}
-      </section>
 
       {!users || users.length === 0 ? (
         <EmptyState title="No users yet" description="Add a user manually or import a CSV." />
@@ -589,7 +410,9 @@ export default function UsersPage() {
                   <th className="px-4 py-2">Email</th>
                   <th className="px-4 py-2">Account authority</th>
                   <th className="px-4 py-2">Status</th>
-                  <th className="px-4 py-2" />
+                  <th className="px-4 py-2">
+                    <span className="sr-only">Actions</span>
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -613,18 +436,32 @@ export default function UsersPage() {
                         </span>
                       </td>
                       <td className="px-4 py-2 text-right">
-                        {u.is_active && (
-                          <Tooltip content="Deactivate user">
-                            <button
-                              type="button"
-                              aria-label={`Deactivate ${u.name}`}
-                              onClick={() => deactivateUser.mutate(u.id)}
-                              className="rounded-md p-2 text-red-600 transition-colors hover:bg-red-50 hover:text-red-800 focus:outline-none focus:ring-2 focus:ring-red-500 dark:text-red-300 dark:hover:bg-red-950/40 dark:hover:text-red-200"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </button>
-                          </Tooltip>
-                        )}
+                        <div className="flex items-center justify-end gap-1">
+                          {u.is_active && u.role === 'user' && (
+                            <Tooltip content="Manage event administrator access">
+                              <button
+                                type="button"
+                                aria-label={`Manage ${u.name} event administrator access`}
+                                onClick={(event) => openAccessDialog(u, event.currentTarget)}
+                                className="rounded-md p-2 text-brand-600 transition-colors hover:bg-brand-50 hover:text-brand-800 focus:outline-none focus:ring-2 focus:ring-brand-500 dark:text-brand-300 dark:hover:bg-brand-950/40 dark:hover:text-brand-200"
+                              >
+                                <ShieldPlus className="h-4 w-4" aria-hidden="true" />
+                              </button>
+                            </Tooltip>
+                          )}
+                          {u.is_active && (
+                            <Tooltip content="Deactivate user">
+                              <button
+                                type="button"
+                                aria-label={`Deactivate ${u.name}`}
+                                onClick={() => deactivateUser.mutate(u.id)}
+                                className="rounded-md p-2 text-red-600 transition-colors hover:bg-red-50 hover:text-red-800 focus:outline-none focus:ring-2 focus:ring-red-500 dark:text-red-300 dark:hover:bg-red-950/40 dark:hover:text-red-200"
+                              >
+                                <Trash2 className="h-4 w-4" aria-hidden="true" />
+                              </button>
+                            </Tooltip>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   );
@@ -652,6 +489,221 @@ export default function UsersPage() {
                 className="rounded border px-3 py-1 disabled:opacity-40 dark:border-gray-700"
               >
                 Next
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {accessUser && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-gray-950/75 p-4"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget && !membershipMutationPending) {
+              closeAccessDialog();
+            }
+          }}
+        >
+          <div
+            ref={dialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="event-access-dialog-title"
+            aria-describedby="event-access-dialog-description"
+            className="max-h-[calc(100vh-2rem)] w-full max-w-lg overflow-y-auto rounded-2xl bg-white shadow-2xl shadow-black/30 dark:bg-gray-900"
+          >
+            <div className="flex items-start justify-between gap-4 border-b border-gray-200 px-5 py-4 dark:border-gray-800">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="rounded-lg bg-brand-100 p-2 text-brand-700 dark:bg-brand-500/20 dark:text-brand-200">
+                    <ShieldCheck className="h-5 w-5" aria-hidden="true" />
+                  </span>
+                  <div className="min-w-0">
+                    <h2 id="event-access-dialog-title" className="truncate text-lg font-semibold">
+                      Manage event access for {accessUser.name}
+                    </h2>
+                    <p className="truncate text-sm text-gray-600 dark:text-gray-300">
+                      {accessUser.email}
+                    </p>
+                  </div>
+                </div>
+                <p
+                  id="event-access-dialog-description"
+                  className="mt-3 text-sm leading-6 text-gray-600 dark:text-gray-300"
+                >
+                  Grant or remove operational dashboard authority for one event. This does not
+                  change the person’s account-level role.
+                </p>
+              </div>
+              <Tooltip content="Close event access dialog">
+                <button
+                  ref={dialogCloseRef}
+                  type="button"
+                  aria-label="Close event access dialog"
+                  onClick={closeAccessDialog}
+                  disabled={membershipMutationPending}
+                  className="shrink-0 rounded-md p-2 text-gray-600 hover:bg-gray-100 hover:text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-500 disabled:opacity-50 dark:text-gray-300 dark:hover:bg-gray-800 dark:hover:text-white"
+                >
+                  <X className="h-4 w-4" aria-hidden="true" />
+                </button>
+              </Tooltip>
+            </div>
+
+            <div className="space-y-5 px-5 py-5">
+              {eventsError ? (
+                <div>
+                  <p role="alert" className="text-sm text-red-700 dark:text-red-300">
+                    Events could not be loaded. Try again before changing access.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => refetchEvents()}
+                    className="mt-2 text-sm font-medium text-brand-700 hover:underline dark:text-brand-200"
+                  >
+                    Try again
+                  </button>
+                </div>
+              ) : eventsLoading ? (
+                <LoadingSpinner label="Loading events..." />
+              ) : events.length === 0 ? (
+                <p className="text-sm text-gray-600 dark:text-gray-300">
+                  Create an event before granting event administrator access.
+                </p>
+              ) : (
+                <>
+                  <label className="block text-sm font-medium">
+                    Event
+                    <select
+                      aria-label="Event to administer"
+                      value={selectedMembershipEventId ?? ''}
+                      onChange={(event) => {
+                        setMembershipEventId(Number(event.target.value));
+                        setMembershipMessage(null);
+                        setMembershipError(null);
+                        setConfirmRemoval(false);
+                      }}
+                      disabled={membershipMutationPending}
+                      className="mt-1.5 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/25 disabled:opacity-60 dark:border-gray-700 dark:bg-gray-800"
+                    >
+                      {events.map((event) => (
+                        <option key={event.id} value={event.id}>
+                          {event.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  {membershipsError ? (
+                    <div>
+                      <p role="alert" className="text-sm text-red-700 dark:text-red-300">
+                        Current event access could not be loaded. No change has been made.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => refetchMemberships()}
+                        className="mt-2 text-sm font-medium text-brand-700 hover:underline dark:text-brand-200"
+                      >
+                        Try again
+                      </button>
+                    </div>
+                  ) : membershipsLoading ? (
+                    <LoadingSpinner label="Checking event access..." />
+                  ) : (
+                    <div className="rounded-xl bg-gray-50 p-4 dark:bg-gray-800/70">
+                      <p className="text-xs font-medium text-gray-600 dark:text-gray-300">
+                        Current authority for {selectedMembershipEvent?.name}
+                      </p>
+                      <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
+                        <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
+                          selectedUserMembership
+                            ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-200'
+                            : 'bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-200'
+                        }`}>
+                          {selectedUserMembership
+                            ? 'Event administrator'
+                            : 'No administrator access'}
+                        </span>
+
+                        {selectedUserMembership ? (
+                          <button
+                            type="button"
+                            onClick={() => setConfirmRemoval(true)}
+                            disabled={membershipMutationPending}
+                            className="rounded-md border border-red-300 px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-500 disabled:opacity-60 dark:border-red-900/70 dark:text-red-300 dark:hover:bg-red-950/40"
+                          >
+                            Remove event administrator access
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setMembershipMessage(null);
+                              setMembershipError(null);
+                              grantEventAdministration.mutate();
+                            }}
+                            disabled={membershipMutationPending}
+                            className="rounded-md bg-brand-600 px-3 py-2 text-sm font-medium text-white hover:bg-brand-700 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2 disabled:opacity-60 dark:focus:ring-offset-gray-900"
+                          >
+                            {grantEventAdministration.isPending
+                              ? 'Granting access...'
+                              : 'Grant event administrator access'}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {confirmRemoval && selectedUserMembership && (
+                    <div className="rounded-xl bg-red-50 p-4 text-sm text-red-950 dark:bg-red-950/40 dark:text-red-100">
+                      <p>
+                        Remove {accessUser.name}’s operational dashboard access to{' '}
+                        {selectedMembershipEvent?.name}?
+                      </p>
+                      <div className="mt-3 flex justify-end gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setConfirmRemoval(false)}
+                          disabled={membershipMutationPending}
+                          className="rounded-md px-3 py-2 font-medium hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-red-500 disabled:opacity-60 dark:hover:bg-red-900/50"
+                        >
+                          Keep access
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => removeEventAdministration.mutate()}
+                          disabled={membershipMutationPending}
+                          className="rounded-md bg-red-700 px-3 py-2 font-medium text-white hover:bg-red-800 focus:outline-none focus:ring-2 focus:ring-red-500 disabled:opacity-60"
+                        >
+                          {removeEventAdministration.isPending
+                            ? 'Removing...'
+                            : 'Confirm removal'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+
+              {membershipMessage && (
+                <p role="status" className="text-sm text-emerald-700 dark:text-emerald-300">
+                  {membershipMessage}
+                </p>
+              )}
+              {membershipError && (
+                <p role="alert" className="text-sm text-red-700 dark:text-red-300">
+                  {membershipError}
+                </p>
+              )}
+            </div>
+
+            <div className="flex justify-end border-t border-gray-200 px-5 py-4 dark:border-gray-800">
+              <button
+                type="button"
+                onClick={closeAccessDialog}
+                disabled={membershipMutationPending}
+                className="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-brand-500 disabled:opacity-50 dark:border-gray-700 dark:hover:bg-gray-800"
+              >
+                Done
               </button>
             </div>
           </div>

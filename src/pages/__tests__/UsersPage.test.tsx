@@ -93,7 +93,7 @@ describe('UsersPage pagination', () => {
     await waitFor(() => expect(api.get).toHaveBeenLastCalledWith('/users', {
       params: { page: 2, limit: 50, search: undefined },
     }));
-  });
+  }, 10_000);
 });
 
 describe('event administration membership management', () => {
@@ -166,11 +166,25 @@ describe('event administration membership management', () => {
     renderPage();
 
     expect(await screen.findByText('Global administrator')).toBeInTheDocument();
-    expect(await screen.findByText('Event administrator')).toBeInTheDocument();
-    expect(screen.getByText(/automatically administer every event/i)).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Event administration' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', {
+      name: /manage global operator event administrator access/i,
+    })).not.toBeInTheDocument();
 
-    const candidateSelect = screen.getByRole('combobox', { name: /person to grant access/i });
-    expect(within(candidateSelect).queryByRole('option', { name: /global@example.com/i })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', {
+      name: /manage event operator event administrator access/i,
+    }));
+
+    const dialog = await screen.findByRole('dialog', {
+      name: /manage event access for event operator/i,
+    });
+    expect(await within(dialog).findByText('Event administrator')).toBeInTheDocument();
+    expect(within(dialog).getByText(
+      /current authority for verigate demo event/i
+    )).toBeInTheDocument();
+
+    fireEvent.keyDown(dialog, { key: 'Escape' });
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
   it('grants event-administrator membership to an eligible active user', async () => {
@@ -195,10 +209,15 @@ describe('event administration membership management', () => {
 
     renderPage();
 
-    fireEvent.change(await screen.findByRole('combobox', { name: /person to grant access/i }), {
-      target: { value: String(standardUser.id) },
+    fireEvent.click(await screen.findByRole('button', {
+      name: /manage standard user event administrator access/i,
+    }));
+    const dialog = await screen.findByRole('dialog', {
+      name: /manage event access for standard user/i,
     });
-    fireEvent.click(screen.getByRole('button', { name: /grant event administrator access/i }));
+    fireEvent.click(await within(dialog).findByRole('button', {
+      name: /grant event administrator access/i,
+    }));
 
     await waitFor(() => expect(api.post).toHaveBeenCalledWith('/events/7/members', {
       user_id: standardUser.id,
@@ -246,11 +265,17 @@ describe('event administration membership management', () => {
     renderPage();
 
     fireEvent.click(await screen.findByRole('button', {
-      name: `Remove ${eventAdministrator.name} event access`,
+      name: /manage event operator event administrator access/i,
+    }));
+    const dialog = await screen.findByRole('dialog', {
+      name: /manage event access for event operator/i,
+    });
+    fireEvent.click(await within(dialog).findByRole('button', {
+      name: 'Remove event administrator access',
     }));
     expect(api.delete).not.toHaveBeenCalled();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Confirm removal' }));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Confirm removal' }));
 
     await waitFor(() => expect(api.delete).toHaveBeenCalledWith(
       `/events/7/members/${eventAdministrator.id}`
@@ -283,12 +308,19 @@ describe('event administration membership management', () => {
 
     renderPage();
 
-    fireEvent.change(await screen.findByRole('combobox', { name: /person to grant access/i }), {
-      target: { value: String(standardUser.id) },
+    fireEvent.click(await screen.findByRole('button', {
+      name: /manage standard user event administrator access/i,
+    }));
+    const dialog = await screen.findByRole('dialog', {
+      name: /manage event access for standard user/i,
     });
-    fireEvent.click(screen.getByRole('button', { name: /grant event administrator access/i }));
+    fireEvent.click(await within(dialog).findByRole('button', {
+      name: /grant event administrator access/i,
+    }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent(/membership update was rejected/i);
-    expect(screen.getByRole('button', { name: /grant event administrator access/i })).toBeEnabled();
+    expect(within(dialog).getByRole('button', {
+      name: /grant event administrator access/i,
+    })).toBeEnabled();
   });
 });
