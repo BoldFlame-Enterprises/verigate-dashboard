@@ -10,6 +10,9 @@ import AnalyticsPage from './pages/AnalyticsPage';
 import SyncMonitorPage from './pages/SyncMonitorPage';
 import IncidentsPage from './pages/IncidentsPage';
 import EventsPage from './pages/EventsPage';
+import ActivateAccountPage from './pages/ActivateAccountPage';
+import ResetPasswordPage from './pages/ResetPasswordPage';
+import ChangePasswordPage from './pages/ChangePasswordPage';
 import { useAuth } from './context/AuthContext';
 import { useEvent } from './context/EventContext';
 
@@ -26,6 +29,8 @@ export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/activate" element={<ActivateAccountPage />} />
+      <Route path="/reset-password" element={<ResetPasswordPage />} />
 
       <Route
         element={(
@@ -45,6 +50,7 @@ export default function App() {
             <Route path="/access" element={<AccessPage />} />
             <Route path="/analytics" element={<AnalyticsPage />} />
             <Route path="/events" element={<EventsPage />} />
+            <Route path="/change-password" element={<ChangePasswordPage />} />
           </Route>
 
           <Route

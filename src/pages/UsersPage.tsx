@@ -13,11 +13,10 @@ interface NewUserForm {
   email: string;
   name: string;
   phone: string;
-  password: string;
   role: UserRole;
 }
 
-const emptyForm: NewUserForm = { email: '', name: '', phone: '', password: '', role: 'user' };
+const emptyForm: NewUserForm = { email: '', name: '', phone: '', role: 'user' };
 
 export default function UsersPage() {
   const queryClient = useQueryClient();
@@ -26,6 +25,7 @@ export default function UsersPage() {
   const [formError, setFormError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [importResult, setImportResult] = useState<string | null>(null);
+  const [activationToken, setActivationToken] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
 
@@ -46,11 +46,12 @@ export default function UsersPage() {
 
   const createUser = useMutation({
     mutationFn: async (payload: NewUserForm) => {
-      const res = await api.post<APIResponse<User>>('/users', payload);
+      const res = await api.post<APIResponse<User & { activation_token: string }>>('/users', payload);
       if (!res.data.success) throw new Error(res.data.error);
       return res.data.data;
     },
-    onSuccess: () => {
+    onSuccess: (created) => {
+      setActivationToken(created?.activation_token ?? null);
       queryClient.invalidateQueries({ queryKey: ['users'] });
       setShowForm(false);
       setForm(emptyForm);
@@ -150,6 +151,13 @@ export default function UsersPage() {
           </Tooltip>
         </div>
       )}
+      {activationToken && (
+        <div className="rounded-md border border-amber-400 bg-amber-50 p-3 text-sm text-amber-950">
+          <strong>Copy this activation token now:</strong>
+          <code className="ml-2 break-all">{activationToken}</code>
+          <p className="mt-1">It is shown once. Deliver it to the intended person through an authenticated channel.</p>
+        </div>
+      )}
 
       {showForm && (
         <div className="rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900">
@@ -177,7 +185,6 @@ export default function UsersPage() {
             <input required placeholder="Name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-800" />
             <input required type="email" placeholder="Email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} className="rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-800" />
             <input required placeholder="Phone" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} className="rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-800" />
-            <input required type="password" minLength={8} maxLength={128} placeholder="Password (8–128 characters)" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} className="rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-800" />
             <select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value as UserRole })} className="rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-800">
               <option value="user">User</option>
               <option value="scanner">Scanner</option>
