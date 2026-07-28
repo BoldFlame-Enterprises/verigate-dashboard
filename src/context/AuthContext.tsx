@@ -6,7 +6,7 @@ interface AuthContextValue {
   user: AuthUser | null;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
-  logout: () => void;
+  logout: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -16,11 +16,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
 
   const loadMe = useCallback(async () => {
-    if (!tokenStorage.getAccessToken()) {
-      setIsLoading(false);
-      return;
-    }
     try {
+      if (!tokenStorage.getAccessToken()) {
+        const refresh = await api.post<APIResponse<{ accessToken: string }>>('/auth/refresh');
+        if (!refresh.data.data?.accessToken) throw new Error('No browser session');
+        tokenStorage.setTokens(refresh.data.data.accessToken);
+      }
       const res = await api.get<APIResponse<AuthUser>>('/users/me');
       setUser(res.data.data ?? null);
     } catch {
@@ -36,22 +37,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [loadMe]);
 
   const login = async (email: string, password: string) => {
-    const res = await api.post<APIResponse<{ user: AuthUser; accessToken: string; refreshToken: string }>>('/auth/login', {
+    const res = await api.post<APIResponse<{ user: AuthUser; accessToken: string }>>('/auth/login', {
       email,
       password,
+      client_kind: 'dashboard',
     });
     if (!res.data.success || !res.data.data) {
       throw new Error(res.data.error || 'Login failed');
     }
-    const { user: loggedInUser, accessToken, refreshToken } = res.data.data;
-    tokenStorage.setTokens(accessToken, refreshToken);
+    const { user: loggedInUser, accessToken } = res.data.data;
+    tokenStorage.setTokens(accessToken);
     setUser(loggedInUser);
   };
 
-  const logout = () => {
-    tokenStorage.clear();
-    setUser(null);
-    window.location.href = '/login';
+  const logout = async () => {
+    try {
+      await api.post('/auth/logout');
+    } finally {
+      tokenStorage.clear();
+      setUser(null);
+      window.location.href = '/login';
+    }
   };
 
   return (

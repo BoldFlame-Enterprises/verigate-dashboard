@@ -2,23 +2,19 @@ import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
 
 export const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
 
-const ACCESS_TOKEN_KEY = 'verigate_access_token';
-const REFRESH_TOKEN_KEY = 'verigate_refresh_token';
+let accessToken: string | null = null;
 
 export const tokenStorage = {
-  getAccessToken: () => localStorage.getItem(ACCESS_TOKEN_KEY),
-  getRefreshToken: () => localStorage.getItem(REFRESH_TOKEN_KEY),
-  setTokens: (accessToken: string, refreshToken: string) => {
-    localStorage.setItem(ACCESS_TOKEN_KEY, accessToken);
-    localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
+  getAccessToken: () => accessToken,
+  setTokens: (nextAccessToken: string, _refreshToken?: string) => {
+    accessToken = nextAccessToken;
   },
   clear: () => {
-    localStorage.removeItem(ACCESS_TOKEN_KEY);
-    localStorage.removeItem(REFRESH_TOKEN_KEY);
+    accessToken = null;
   },
 };
 
-export const api = axios.create({ baseURL: API_BASE_URL });
+export const api = axios.create({ baseURL: API_BASE_URL, withCredentials: true });
 
 api.interceptors.request.use((config) => {
   const token = tokenStorage.getAccessToken();
@@ -32,14 +28,15 @@ api.interceptors.request.use((config) => {
 let refreshPromise: Promise<string | null> | null = null;
 
 async function refreshAccessToken(): Promise<string | null> {
-  const refreshToken = tokenStorage.getRefreshToken();
-  if (!refreshToken) return null;
-
   try {
-    const response = await axios.post(`${API_BASE_URL}/auth/refresh`, { refreshToken });
-    const { accessToken, refreshToken: newRefreshToken } = response.data.data;
-    tokenStorage.setTokens(accessToken, newRefreshToken);
-    return accessToken;
+    const response = await axios.post(
+      `${API_BASE_URL}/auth/refresh`,
+      {},
+      { withCredentials: true },
+    );
+    const { accessToken: nextAccessToken } = response.data.data;
+    tokenStorage.setTokens(nextAccessToken);
+    return nextAccessToken;
   } catch {
     tokenStorage.clear();
     return null;
