@@ -4,9 +4,14 @@ The admin web dashboard for the VeriGate Access Control system.
 
 ## 🚀 Features
 
-- **Auth**: JWT login (with refresh-token handling) against the backend, role-gated to admins.
+- **Revocable browser auth**: access and CSRF values remain in memory; a
+  rotating HttpOnly production cookie bootstraps refresh through exact CORS,
+  origin, and session-bound CSRF checks. Concurrent tab refreshes are
+  coordinated without persistent bearer storage.
 - **Event management**: create/select events; every other view is scoped to the selected event.
-- **User management**: server-driven search/pagination, CRUD, deactivate, and bulk CSV import/export.
+- **Administrator-led identity management**: server-driven
+  search/pagination, pending-user creation, one-time activation delivery,
+  password reset, deactivate, password-free bulk CSV import, and export.
 - **Access & area configuration**: CRUD for access levels and areas, plus assignment management.
 - **Analytics**: scan-volume-over-time and grant/deny/area/access-level/scanner breakdown charts (Recharts), backed by cached backend aggregate endpoints, with CSV export of the raw scan log.
 - **Polling-based sync monitoring**: active views refetch approximately every 10 seconds to show each device's last-sync time and online/stale/offline status. “Live” means polling, not a socket stream; dashboard/analytics backend data uses five-second cache windows retained for 15 seconds.
