@@ -34,6 +34,16 @@ const navItems: Array<{
 export default function Layout() {
   const { user, logout } = useAuth();
   const { events, selectedEvent, selectEvent, hasCapability } = useEvent();
+  const authorityLabel = user?.role === 'admin'
+    ? 'Global administrator'
+    : selectedEvent?.administration_scope === 'event'
+      ? 'Event administrator'
+      : user?.role;
+  const authorityClass = user?.role === 'admin'
+    ? 'bg-brand-100 text-brand-800 dark:bg-brand-500/20 dark:text-brand-200'
+    : selectedEvent?.administration_scope === 'event'
+      ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-200'
+      : 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300';
 
   return (
     <div className="flex h-screen overflow-hidden">
@@ -97,14 +107,13 @@ export default function Layout() {
               ))}
             </select>
           </div>
-          <div className="text-sm text-gray-500 dark:text-gray-400">
-            {user?.name}{' '}
-            <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs dark:bg-gray-800">
-              {user?.role === 'admin'
-                ? 'global admin'
-                : selectedEvent?.administration_scope === 'event'
-                  ? 'event admin'
-                  : user?.role}
+          <div className="flex min-w-0 items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
+            <span className="truncate">{user?.name}</span>
+            <span
+              aria-label={`Account authority: ${authorityLabel}`}
+              className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${authorityClass}`}
+            >
+              {authorityLabel}
             </span>
           </div>
         </header>
