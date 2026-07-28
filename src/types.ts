@@ -35,6 +35,17 @@ export interface Event {
   capabilities?: EventCapability[];
 }
 
+export interface EventMembership {
+  id: number;
+  user_id: number;
+  name: string;
+  email: string;
+  role: UserRole;
+  role_in_event: string;
+  is_active: boolean;
+  joined_at: string;
+}
+
 export type EventCapability =
   | 'manage_event_devices'
   | 'manage_operational_cases';

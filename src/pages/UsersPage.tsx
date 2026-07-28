@@ -1,9 +1,17 @@
-import { useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Plus, Upload, Download, Trash2, X } from 'lucide-react';
+import {
+  Download,
+  Plus,
+  ShieldCheck,
+  Trash2,
+  Upload,
+  UserMinus,
+  X,
+} from 'lucide-react';
 import { api, API_BASE_URL, tokenStorage, APIResponse } from '../lib/api';
 import { getErrorMessage } from '../lib/errors';
-import { User, UserRole } from '../types';
+import { Event, EventMembership, User, UserRole } from '../types';
 import LoadingSpinner from '../components/LoadingSpinner';
 import ErrorState from '../components/ErrorState';
 import EmptyState from '../components/EmptyState';
@@ -18,6 +26,25 @@ interface NewUserForm {
 
 const emptyForm: NewUserForm = { email: '', name: '', phone: '', role: 'user' };
 
+function accountAuthority(user: User) {
+  if (user.role === 'admin') {
+    return {
+      label: 'Global administrator',
+      className: 'bg-brand-100 text-brand-800 dark:bg-brand-500/20 dark:text-brand-200',
+    };
+  }
+  if (user.role === 'scanner') {
+    return {
+      label: 'Scanner',
+      className: 'bg-sky-100 text-sky-800 dark:bg-sky-500/15 dark:text-sky-200',
+    };
+  }
+  return {
+    label: 'Standard user',
+    className: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300',
+  };
+}
+
 export default function UsersPage() {
   const queryClient = useQueryClient();
   const [showForm, setShowForm] = useState(false);
@@ -28,6 +55,11 @@ export default function UsersPage() {
   const [activationToken, setActivationToken] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
+  const [membershipEventId, setMembershipEventId] = useState<number | null>(null);
+  const [membershipUserId, setMembershipUserId] = useState('');
+  const [membershipMessage, setMembershipMessage] = useState<string | null>(null);
+  const [membershipError, setMembershipError] = useState<string | null>(null);
+  const [removalCandidate, setRemovalCandidate] = useState<EventMembership | null>(null);
 
   const { data: usersPage, isLoading, isError } = useQuery({
     queryKey: ['users', { page, search }],
@@ -41,8 +73,64 @@ export default function UsersPage() {
       };
     },
   });
-  const users = usersPage?.users ?? [];
+  const users = useMemo(() => usersPage?.users ?? [], [usersPage?.users]);
   const pagination = usersPage?.pagination;
+
+  const {
+    data: events = [],
+    isLoading: eventsLoading,
+    isError: eventsError,
+    refetch: refetchEvents,
+  } = useQuery({
+    queryKey: ['events'],
+    queryFn: async () => {
+      const res = await api.get<APIResponse<Event[]>>('/events');
+      return res.data.data ?? [];
+    },
+  });
+  const selectedMembershipEventId = membershipEventId ?? events[0]?.id ?? null;
+  const selectedMembershipEvent = events.find(
+    (event) => event.id === selectedMembershipEventId
+  ) ?? null;
+
+  const {
+    data: memberships = [],
+    isLoading: membershipsLoading,
+    isError: membershipsError,
+    refetch: refetchMemberships,
+  } = useQuery({
+    queryKey: ['event-members', selectedMembershipEventId],
+    queryFn: async () => {
+      const res = await api.get<APIResponse<EventMembership[]>>(
+        `/events/${selectedMembershipEventId}/members`
+      );
+      return res.data.data ?? [];
+    },
+    enabled: selectedMembershipEventId !== null,
+  });
+
+  const eventAdministrators = useMemo(
+    () => memberships.filter(
+      (membership) =>
+        membership.is_active &&
+        membership.role_in_event === 'admin' &&
+        membership.role !== 'admin'
+    ),
+    [memberships]
+  );
+  const eventAdministratorIds = useMemo(
+    () => new Set(eventAdministrators.map((membership) => membership.user_id)),
+    [eventAdministrators]
+  );
+  const eligibleUsers = useMemo(
+    () => users.filter(
+      (user) =>
+        user.is_active &&
+        user.role === 'user' &&
+        !eventAdministratorIds.has(user.id)
+    ),
+    [eventAdministratorIds, users]
+  );
 
   const createUser = useMutation({
     mutationFn: async (payload: NewUserForm) => {
@@ -62,6 +150,60 @@ export default function UsersPage() {
   const deactivateUser = useMutation({
     mutationFn: async (id: number) => api.delete(`/users/${id}`),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['users'] }),
+  });
+
+  const grantEventAdministration = useMutation({
+    mutationFn: async (user: User) => {
+      if (selectedMembershipEventId === null) {
+        throw new Error('Choose an event before granting access.');
+      }
+      const res = await api.post<APIResponse<EventMembership>>(
+        `/events/${selectedMembershipEventId}/members`,
+        { user_id: user.id, role_in_event: 'admin' }
+      );
+      if (!res.data.success) throw new Error(res.data.error);
+      return user;
+    },
+    onSuccess: (user) => {
+      setMembershipError(null);
+      setMembershipUserId('');
+      setMembershipMessage(
+        `${user.name} can now administer ${selectedMembershipEvent?.name ?? 'this event'}.`
+      );
+      queryClient.invalidateQueries({
+        queryKey: ['event-members', selectedMembershipEventId],
+      });
+    },
+    onError: (error: unknown) => {
+      setMembershipMessage(null);
+      setMembershipError(getErrorMessage(error));
+    },
+  });
+
+  const removeEventAdministration = useMutation({
+    mutationFn: async (membership: EventMembership) => {
+      if (selectedMembershipEventId === null) {
+        throw new Error('Choose an event before removing access.');
+      }
+      await api.delete(
+        `/events/${selectedMembershipEventId}/members/${membership.user_id}`
+      );
+      return membership;
+    },
+    onSuccess: (membership) => {
+      setMembershipError(null);
+      setRemovalCandidate(null);
+      setMembershipMessage(
+        `${membership.name} no longer administers ${selectedMembershipEvent?.name ?? 'this event'}.`
+      );
+      queryClient.invalidateQueries({
+        queryKey: ['event-members', selectedMembershipEventId],
+      });
+    },
+    onError: (error: unknown) => {
+      setMembershipMessage(null);
+      setMembershipError(getErrorMessage(error));
+    },
   });
 
   const handleExport = () => {
@@ -89,11 +231,20 @@ export default function UsersPage() {
   if (isLoading) return <LoadingSpinner label="Loading users..." />;
   if (isError) return <ErrorState />;
 
+  const selectedMembershipUser = eligibleUsers.find(
+    (user) => user.id === Number(membershipUserId)
+  );
+
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Users</h1>
-        <div className="flex gap-2">
+    <div className="space-y-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold">Users</h1>
+          <p className="mt-1 text-sm text-gray-600 dark:text-gray-300">
+            Provision accounts and control who can administer each event.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
           <input
             ref={fileInputRef}
             type="file"
@@ -103,19 +254,19 @@ export default function UsersPage() {
           />
           <button
             onClick={() => fileInputRef.current?.click()}
-            className="flex items-center gap-1.5 rounded-md border border-gray-300 px-3 py-1.5 text-sm hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-800"
+            className="flex items-center gap-1.5 rounded-md border border-gray-300 px-3 py-1.5 text-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-brand-500 dark:border-gray-700 dark:hover:bg-gray-800"
           >
             <Upload className="h-4 w-4" /> Import CSV
           </button>
           <button
             onClick={handleExport}
-            className="flex items-center gap-1.5 rounded-md border border-gray-300 px-3 py-1.5 text-sm hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-800"
+            className="flex items-center gap-1.5 rounded-md border border-gray-300 px-3 py-1.5 text-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-brand-500 dark:border-gray-700 dark:hover:bg-gray-800"
           >
             <Download className="h-4 w-4" /> Export CSV
           </button>
           <button
             onClick={() => setShowForm(true)}
-            className="flex items-center gap-1.5 rounded-md bg-brand-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-700"
+            className="flex items-center gap-1.5 rounded-md bg-brand-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-700 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2 dark:focus:ring-offset-gray-950"
           >
             <Plus className="h-4 w-4" /> Add user
           </button>
@@ -188,8 +339,14 @@ export default function UsersPage() {
             <select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value as UserRole })} className="rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-800">
               <option value="user">User</option>
               <option value="scanner">Scanner</option>
-              <option value="admin">Admin</option>
+              <option value="admin">Global administrator</option>
             </select>
+            {form.role === 'admin' && (
+              <p className="col-span-2 text-sm text-brand-700 dark:text-brand-200">
+                Global administrators can manage every event. For event-limited access, create a
+                standard user and use Event administration below.
+              </p>
+            )}
             <button type="submit" disabled={createUser.isPending} className="rounded-md bg-brand-600 px-3 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-60">
               {createUser.isPending ? 'Creating...' : 'Create user'}
             </button>
@@ -198,49 +355,283 @@ export default function UsersPage() {
         </div>
       )}
 
+      <section
+        aria-labelledby="event-administration-heading"
+        className="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900"
+      >
+        <div className="border-b border-gray-200 px-4 py-4 dark:border-gray-800 sm:px-5">
+          <div className="flex items-start gap-3">
+            <span className="rounded-lg bg-brand-100 p-2 text-brand-700 dark:bg-brand-500/20 dark:text-brand-200">
+              <ShieldCheck className="h-5 w-5" aria-hidden="true" />
+            </span>
+            <div>
+              <h2 id="event-administration-heading" className="font-semibold">
+                Event administration
+              </h2>
+              <p className="mt-1 max-w-2xl text-sm text-gray-600 dark:text-gray-300">
+                Grant operational dashboard access for one event without creating another global
+                administrator.
+              </p>
+            </div>
+          </div>
+          <p className="mt-3 text-sm text-brand-800 dark:text-brand-200">
+            Global administrators automatically administer every event and are not listed as
+            event-scoped assignments.
+          </p>
+        </div>
+
+        {eventsError ? (
+          <div className="px-4 py-5 sm:px-5">
+            <p role="alert" className="text-sm text-red-700 dark:text-red-300">
+              Events could not be loaded.
+            </p>
+            <button
+              type="button"
+              onClick={() => refetchEvents()}
+              className="mt-2 text-sm font-medium text-brand-700 hover:underline dark:text-brand-200"
+            >
+              Try again
+            </button>
+          </div>
+        ) : eventsLoading ? (
+          <div className="px-4 py-5 sm:px-5">
+            <LoadingSpinner label="Loading event administration..." />
+          </div>
+        ) : events.length === 0 ? (
+          <p className="px-4 py-5 text-sm text-gray-600 dark:text-gray-300 sm:px-5">
+            Create an event before assigning an event administrator.
+          </p>
+        ) : (
+          <div className="grid lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+            <div className="space-y-4 border-b border-gray-200 p-4 dark:border-gray-800 sm:p-5 lg:border-b-0 lg:border-r">
+              <label className="block text-sm font-medium">
+                Event
+                <select
+                  aria-label="Event to administer"
+                  value={selectedMembershipEventId ?? ''}
+                  onChange={(event) => {
+                    setMembershipEventId(Number(event.target.value));
+                    setMembershipUserId('');
+                    setMembershipMessage(null);
+                    setMembershipError(null);
+                    setRemovalCandidate(null);
+                  }}
+                  className="mt-1.5 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/25 dark:border-gray-700 dark:bg-gray-800"
+                >
+                  {events.map((event) => (
+                    <option key={event.id} value={event.id}>
+                      {event.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="block text-sm font-medium">
+                Person to grant access
+                <select
+                  aria-label="Person to grant access"
+                  value={membershipUserId}
+                  onChange={(event) => setMembershipUserId(event.target.value)}
+                  disabled={membershipsLoading || eligibleUsers.length === 0}
+                  className="mt-1.5 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/25 disabled:cursor-not-allowed disabled:opacity-60 dark:border-gray-700 dark:bg-gray-800"
+                >
+                  <option value="">
+                    {eligibleUsers.length === 0
+                      ? 'No eligible users on this page'
+                      : 'Choose an active standard user'}
+                  </option>
+                  {eligibleUsers.map((user) => (
+                    <option key={user.id} value={user.id}>
+                      {user.name} · {user.email}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <button
+                type="button"
+                onClick={() => {
+                  if (!selectedMembershipUser) return;
+                  setMembershipError(null);
+                  setMembershipMessage(null);
+                  grantEventAdministration.mutate(selectedMembershipUser);
+                }}
+                disabled={!selectedMembershipUser || grantEventAdministration.isPending}
+                className="w-full rounded-md bg-brand-600 px-3 py-2 text-sm font-medium text-white hover:bg-brand-700 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 dark:focus:ring-offset-gray-900"
+              >
+                {grantEventAdministration.isPending
+                  ? 'Granting access...'
+                  : 'Grant event administrator access'}
+              </button>
+              <p className="text-xs leading-5 text-gray-500 dark:text-gray-400">
+                Search or change pages in the user directory below to find another eligible person.
+              </p>
+            </div>
+
+            <div className="min-w-0 p-4 sm:p-5">
+              <div className="flex items-center justify-between gap-3">
+                <h3 className="font-medium">
+                  Assigned to {selectedMembershipEvent?.name}
+                </h3>
+                <span className="shrink-0 text-xs text-gray-500 dark:text-gray-400">
+                  {eventAdministrators.length}{' '}
+                  {eventAdministrators.length === 1 ? 'administrator' : 'administrators'}
+                </span>
+              </div>
+
+              {membershipsError ? (
+                <div className="mt-4">
+                  <p role="alert" className="text-sm text-red-700 dark:text-red-300">
+                    Event administrators could not be loaded.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => refetchMemberships()}
+                    className="mt-2 text-sm font-medium text-brand-700 hover:underline dark:text-brand-200"
+                  >
+                    Try again
+                  </button>
+                </div>
+              ) : membershipsLoading ? (
+                <div className="mt-4">
+                  <LoadingSpinner label="Loading event administrators..." />
+                </div>
+              ) : eventAdministrators.length === 0 ? (
+                <p className="mt-4 text-sm text-gray-600 dark:text-gray-300">
+                  No event administrators are assigned yet.
+                </p>
+              ) : (
+                <ul className="mt-3 divide-y divide-gray-100 dark:divide-gray-800">
+                  {eventAdministrators.map((membership) => (
+                    <li key={membership.id} className="py-3">
+                      <div className="flex min-w-0 items-center justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-medium">{membership.name}</p>
+                          <p className="truncate text-xs text-gray-500 dark:text-gray-400">
+                            {membership.email}
+                          </p>
+                        </div>
+                        <div className="flex shrink-0 items-center gap-2">
+                          <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-200">
+                            Event administrator
+                          </span>
+                          <Tooltip content="Remove event administrator access">
+                            <button
+                              type="button"
+                              aria-label={`Remove ${membership.name} event access`}
+                              onClick={() => setRemovalCandidate(membership)}
+                              disabled={removeEventAdministration.isPending}
+                              className="rounded-md p-2 text-red-600 hover:bg-red-50 hover:text-red-800 focus:outline-none focus:ring-2 focus:ring-red-500 disabled:opacity-50 dark:text-red-300 dark:hover:bg-red-950/40 dark:hover:text-red-200"
+                            >
+                              <UserMinus className="h-4 w-4" aria-hidden="true" />
+                            </button>
+                          </Tooltip>
+                        </div>
+                      </div>
+
+                      {removalCandidate?.id === membership.id && (
+                        <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-900 dark:bg-red-950/40 dark:text-red-100">
+                          <span>Remove this person’s access to {selectedMembershipEvent?.name}?</span>
+                          <div className="flex gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setRemovalCandidate(null)}
+                              className="rounded-md px-2 py-1 font-medium hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-red-500 dark:hover:bg-red-900/50"
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => removeEventAdministration.mutate(membership)}
+                              disabled={removeEventAdministration.isPending}
+                              className="rounded-md bg-red-700 px-2 py-1 font-medium text-white hover:bg-red-800 focus:outline-none focus:ring-2 focus:ring-red-500 disabled:opacity-60"
+                            >
+                              {removeEventAdministration.isPending
+                                ? 'Removing...'
+                                : 'Confirm removal'}
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+        )}
+
+        {(membershipMessage || membershipError) && (
+          <div className="border-t border-gray-200 px-4 py-3 dark:border-gray-800 sm:px-5">
+            {membershipMessage && (
+              <p role="status" className="text-sm text-emerald-700 dark:text-emerald-300">
+                {membershipMessage}
+              </p>
+            )}
+            {membershipError && (
+              <p role="alert" className="text-sm text-red-700 dark:text-red-300">
+                {membershipError}
+              </p>
+            )}
+          </div>
+        )}
+      </section>
+
       {!users || users.length === 0 ? (
         <EmptyState title="No users yet" description="Add a user manually or import a CSV." />
       ) : (
         <div className="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50 text-left text-gray-500 dark:bg-gray-800/50 dark:text-gray-400">
-              <tr>
-                <th className="px-4 py-2">Name</th>
-                <th className="px-4 py-2">Email</th>
-                <th className="px-4 py-2">Role</th>
-                <th className="px-4 py-2">Status</th>
-                <th className="px-4 py-2" />
-              </tr>
-            </thead>
-            <tbody>
-              {users.map((u) => (
-                <tr key={u.id} className="border-t border-gray-100 dark:border-gray-800">
-                  <td className="px-4 py-2">{u.name}</td>
-                  <td className="px-4 py-2">{u.email}</td>
-                  <td className="px-4 py-2 capitalize">{u.role}</td>
-                  <td className="px-4 py-2">
-                    <span className={`rounded-full px-2 py-0.5 text-xs ${u.is_active ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400' : 'bg-gray-100 text-gray-500 dark:bg-gray-800'}`}>
-                      {u.is_active ? 'Active' : 'Inactive'}
-                    </span>
-                  </td>
-                  <td className="px-4 py-2 text-right">
-                    {u.is_active && (
-                      <Tooltip content="Deactivate user">
-                        <button
-                          type="button"
-                          aria-label={`Deactivate ${u.name}`}
-                          onClick={() => deactivateUser.mutate(u.id)}
-                          className="rounded-md p-2 text-gray-500 transition-colors hover:bg-red-50 hover:text-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 dark:hover:bg-red-950/40 dark:hover:text-red-300"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      </Tooltip>
-                    )}
-                  </td>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[720px] text-sm">
+              <thead className="bg-gray-50 text-left text-gray-500 dark:bg-gray-800/50 dark:text-gray-400">
+                <tr>
+                  <th className="px-4 py-2">Name</th>
+                  <th className="px-4 py-2">Email</th>
+                  <th className="px-4 py-2">Account authority</th>
+                  <th className="px-4 py-2">Status</th>
+                  <th className="px-4 py-2" />
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {users.map((u) => {
+                  const authority = accountAuthority(u);
+                  const statusClass = u.is_active
+                    ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300'
+                    : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300';
+                  return (
+                    <tr key={u.id} className="border-t border-gray-100 dark:border-gray-800">
+                      <td className="px-4 py-2">{u.name}</td>
+                      <td className="px-4 py-2">{u.email}</td>
+                      <td className="px-4 py-2">
+                        <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${authority.className}`}>
+                          {authority.label}
+                        </span>
+                      </td>
+                      <td className="px-4 py-2">
+                        <span className={`rounded-full px-2 py-0.5 text-xs ${statusClass}`}>
+                          {u.is_active ? 'Active' : 'Inactive'}
+                        </span>
+                      </td>
+                      <td className="px-4 py-2 text-right">
+                        {u.is_active && (
+                          <Tooltip content="Deactivate user">
+                            <button
+                              type="button"
+                              aria-label={`Deactivate ${u.name}`}
+                              onClick={() => deactivateUser.mutate(u.id)}
+                              className="rounded-md p-2 text-red-600 transition-colors hover:bg-red-50 hover:text-red-800 focus:outline-none focus:ring-2 focus:ring-red-500 dark:text-red-300 dark:hover:bg-red-950/40 dark:hover:text-red-200"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </Tooltip>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
           <div className="flex items-center justify-between border-t border-gray-200 px-4 py-3 text-sm dark:border-gray-800">
             <span>
               Page {pagination?.page ?? page} of {pagination?.totalPages ?? 1} · {pagination?.total ?? users.length} users
