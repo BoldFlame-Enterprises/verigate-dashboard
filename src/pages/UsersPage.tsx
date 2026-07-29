@@ -9,7 +9,7 @@ import {
   Upload,
   X,
 } from 'lucide-react';
-import { api, API_BASE_URL, tokenStorage, APIResponse } from '../lib/api';
+import { api, APIResponse, downloadAuthenticatedCsv } from '../lib/api';
 import { getErrorMessage } from '../lib/errors';
 import { Event, EventMembership, User, UserRole } from '../types';
 import { useEvent } from '../context/EventContext';
@@ -331,26 +331,25 @@ export default function UsersPage() {
     setAccessUser(user);
   };
 
-  const handleExport = () => {
-    const token = tokenStorage.getAccessToken();
-    fetch(`${API_BASE_URL}/users/export/csv`, { headers: { Authorization: `Bearer ${token}` } })
-      .then((r) => r.blob())
-      .then((blob) => {
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'users-export.csv';
-        a.click();
-        URL.revokeObjectURL(url);
-      });
+  const handleExport = async () => {
+    setImportResult(null);
+    try {
+      await downloadAuthenticatedCsv('/users/export/csv', 'users-export.csv');
+    } catch (error) {
+      setImportResult((error as Error).message);
+    }
   };
 
   const handleImport = async (file: File) => {
-    const csv = await file.text();
-    const res = await api.post<APIResponse<{ imported: number; skipped: number; errors: string[] }>>('/users/bulk-import', { csv });
-    const result = res.data.data;
-    setImportResult(`Imported ${result?.imported ?? 0}, skipped ${result?.skipped ?? 0}${result?.errors.length ? `, ${result.errors.length} errors` : ''}`);
-    queryClient.invalidateQueries({ queryKey: ['users'] });
+    try {
+      const csv = await file.text();
+      const res = await api.post<APIResponse<{ imported: number; skipped: number; errors: string[] }>>('/users/bulk-import', { csv });
+      const result = res.data.data;
+      setImportResult(`Imported ${result?.imported ?? 0}, skipped ${result?.skipped ?? 0}${result?.errors.length ? `, ${result.errors.length} errors` : ''}`);
+      queryClient.invalidateQueries({ queryKey: ['users'] });
+    } catch (error) {
+      setImportResult((error as { response?: { data?: { error?: string } } }).response?.data?.error || 'Import failed');
+    }
   };
 
   if (isLoading) return <LoadingSpinner label="Loading users..." />;

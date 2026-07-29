@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Download } from 'lucide-react';
 import {
@@ -13,7 +14,7 @@ import {
   Pie,
   Cell,
 } from 'recharts';
-import { api, API_BASE_URL, tokenStorage, APIResponse } from '../lib/api';
+import { api, APIResponse, downloadAuthenticatedCsv } from '../lib/api';
 import { useEvent } from '../context/EventContext';
 import LoadingSpinner from '../components/LoadingSpinner';
 import ErrorState from '../components/ErrorState';
@@ -43,6 +44,7 @@ const TOOLTIP_STYLE = {
 export default function AnalyticsPage() {
   const { selectedEvent } = useEvent();
   const eventId = selectedEvent?.id;
+  const [exportError, setExportError] = useState<string | null>(null);
 
   const { data: volume, isLoading: volumeLoading } = useQuery({
     queryKey: ['analytics-volume', eventId],
@@ -64,18 +66,16 @@ export default function AnalyticsPage() {
     refetchInterval: LIVE_REFRESH_INTERVAL,
   });
 
-  const handleExport = () => {
-    const token = tokenStorage.getAccessToken();
-    fetch(`${API_BASE_URL}/analytics/export/scans.csv?event_id=${eventId}`, { headers: { Authorization: `Bearer ${token}` } })
-      .then((r) => r.blob())
-      .then((blob) => {
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `scans-event-${eventId}.csv`;
-        a.click();
-        URL.revokeObjectURL(url);
-      });
+  const handleExport = async () => {
+    setExportError(null);
+    try {
+      await downloadAuthenticatedCsv(
+        `/analytics/export/scans.csv?event_id=${eventId}`,
+        `scans-event-${eventId}.csv`,
+      );
+    } catch (error) {
+      setExportError((error as Error).message);
+    }
   };
 
   if (!selectedEvent) return <EmptyState title="No event selected" />;
@@ -99,6 +99,7 @@ export default function AnalyticsPage() {
           <Download className="h-4 w-4" /> Export scans CSV
         </button>
       </div>
+      {exportError && <p role="alert" className="text-sm text-red-600 dark:text-red-400">{exportError}</p>}
 
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
         <div className="rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900">

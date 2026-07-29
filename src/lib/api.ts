@@ -106,10 +106,36 @@ export async function bootstrapBrowserSession(): Promise<string | null> {
   return refreshAccessToken();
 }
 
+export async function downloadAuthenticatedCsv(path: string, filename: string): Promise<void> {
+  const token = tokenStorage.getAccessToken();
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null) as { error?: string } | null;
+    throw new Error(payload?.error || `Export failed with status ${response.status}`);
+  }
+  if (!response.headers.get('content-type')?.includes('text/csv')) {
+    throw new Error('Export response was not CSV');
+  }
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  try {
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = filename;
+    anchor.click();
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
 export interface APIResponse<T = unknown> {
   success: boolean;
   data?: T;
   error?: string;
+  code?: string;
+  retryable?: boolean;
   message?: string;
   pagination?: {
     page: number;
