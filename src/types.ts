@@ -198,6 +198,12 @@ export interface EmergencyOverride {
   reviewed_by_name: string | null;
 }
 
+export interface CasePage<T> {
+  items: T[];
+  has_more: boolean;
+  next_cursor: string | null;
+}
+
 export interface CaseAdministrator {
   id: number;
   name: string;

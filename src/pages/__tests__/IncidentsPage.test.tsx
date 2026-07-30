@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import IncidentsPage from '../IncidentsPage';
 
@@ -87,8 +87,20 @@ const overrideCase = (overrides: Record<string, unknown> = {}) => ({
 
 function installQueries(incidents = [incident()], overrides = [overrideCase()]) {
   useQueryMock.mockImplementation(({ queryKey }: { queryKey: unknown[] }) => {
-    if (queryKey[0] === 'incidents') return { data: incidents, isLoading: false, isError: false };
-    if (queryKey[0] === 'overrides') return { data: overrides, isLoading: false, isError: false };
+    if (queryKey[0] === 'incidents') {
+      return {
+        data: { items: incidents, has_more: false, next_cursor: null },
+        isLoading: false,
+        isError: false,
+      };
+    }
+    if (queryKey[0] === 'overrides') {
+      return {
+        data: { items: overrides, has_more: false, next_cursor: null },
+        isLoading: false,
+        isError: false,
+      };
+    }
     if (queryKey[0] === 'case-administrators') {
       return {
         data: [
@@ -203,14 +215,16 @@ describe('IncidentsPage reviewed operational interactions', () => {
     render(<IncidentsPage />);
 
     expect(useQueryMock.mock.calls.slice(0, 3).map(([options]) => options.queryKey)).toEqual([
-      ['incidents', 7],
-      ['overrides', 7],
+      ['incidents', 7, 'recent', 50],
+      ['overrides', 7, 'recent', 50],
       ['case-administrators', 7],
     ]);
     expect(useQueryMock.mock.calls[0][0]).toMatchObject({ enabled: true, refetchInterval: 10_000 });
     apiGetMock.mockResolvedValue({ data: { data: [] } });
     await useQueryMock.mock.calls[0][0].queryFn();
-    expect(apiGetMock).toHaveBeenCalledWith('/incidents', { params: { event_id: 7 } });
+    expect(apiGetMock).toHaveBeenCalledWith('/incidents', {
+      params: { event_id: 7, limit: 50 },
+    });
   });
 
   it('refreshes the event case lists after an optimistic conflict', async () => {
@@ -234,5 +248,55 @@ describe('IncidentsPage reviewed operational interactions', () => {
       queryKey: ['incident-activity', 7, 1],
       enabled: true,
     }));
+  });
+
+  it('loads older incident history with the event-qualified cursor without polling it', async () => {
+    useQueryMock.mockImplementation(({ queryKey }: { queryKey: unknown[] }) => {
+      if (queryKey[0] === 'incidents') {
+        return {
+          data: { items: [incident()], has_more: true, next_cursor: 'incident-cursor' },
+          isLoading: false,
+          isError: false,
+        };
+      }
+      if (queryKey[0] === 'overrides') {
+        return {
+          data: { items: [], has_more: false, next_cursor: null },
+          isLoading: false,
+          isError: false,
+        };
+      }
+      if (queryKey[0] === 'case-administrators') {
+        return { data: [], isLoading: false, isError: false };
+      }
+      return { data: [], isLoading: false, isError: false };
+    });
+    apiGetMock.mockResolvedValue({
+      data: {
+        data: {
+          items: [incident({ id: 2, description: 'Older incident' })],
+          has_more: false,
+          next_cursor: null,
+        },
+      },
+    });
+    render(<IncidentsPage />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Load older incidents' }));
+
+    await waitFor(() => {
+      expect(apiGetMock).toHaveBeenCalledWith('/incidents', {
+        params: {
+          event_id: 7,
+          limit: 50,
+          cursor: 'incident-cursor',
+        },
+      });
+    });
+    expect(screen.getByText('Older incident')).toBeInTheDocument();
+    expect(useQueryMock.mock.calls[0][0]).toMatchObject({
+      queryKey: ['incidents', 7, 'recent', 50],
+      refetchInterval: 10_000,
+    });
   });
 });

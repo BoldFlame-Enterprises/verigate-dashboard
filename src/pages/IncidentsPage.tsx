@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   AlertTriangle,
@@ -14,6 +14,7 @@ import { api, APIResponse } from '../lib/api';
 import { useEvent } from '../context/EventContext';
 import {
   CaseAdministrator,
+  CasePage,
   EmergencyOverride,
   Incident,
   OperationalCaseActivity,
@@ -166,30 +167,84 @@ export default function IncidentsPage() {
   const [formError, setFormError] = useState('');
   const [conflictNotice, setConflictNotice] = useState('');
   const [activity, setActivity] = useState<{ kind: CaseKind; id: number } | null>(null);
+  const [incidentHistory, setIncidentHistory] = useState<Incident[]>([]);
+  const [incidentCursor, setIncidentCursor] = useState<string | null>(null);
+  const [incidentHistoryLoading, setIncidentHistoryLoading] = useState(false);
+  const [overrideHistory, setOverrideHistory] = useState<EmergencyOverride[]>([]);
+  const [overrideCursor, setOverrideCursor] = useState<string | null>(null);
+  const [overrideHistoryLoading, setOverrideHistoryLoading] = useState(false);
 
-  const { data: incidents, isLoading: incidentsLoading, isError: incidentsError } = useQuery({
-    queryKey: ['incidents', eventId],
+  useEffect(() => {
+    setIncidentHistory([]);
+    setIncidentCursor(null);
+    setOverrideHistory([]);
+    setOverrideCursor(null);
+  }, [eventId]);
+
+  const { data: incidentPage, isLoading: incidentsLoading, isError: incidentsError } = useQuery({
+    queryKey: ['incidents', eventId, 'recent', 50],
     queryFn: async () => {
-      const response = await api.get<APIResponse<Incident[]>>('/incidents', {
-        params: { event_id: eventId },
+      const response = await api.get<APIResponse<CasePage<Incident>>>('/incidents', {
+        params: { event_id: eventId, limit: 50 },
       });
-      return response.data.data ?? [];
+      return response.data.data ?? { items: [], has_more: false, next_cursor: null };
     },
     enabled: !!eventId,
     refetchInterval: 10_000,
   });
 
-  const { data: overrides, isLoading: overridesLoading, isError: overridesError } = useQuery({
-    queryKey: ['overrides', eventId],
+  const { data: overridePage, isLoading: overridesLoading, isError: overridesError } = useQuery({
+    queryKey: ['overrides', eventId, 'recent', 50],
     queryFn: async () => {
-      const response = await api.get<APIResponse<EmergencyOverride[]>>('/incidents/overrides', {
-        params: { event_id: eventId },
+      const response = await api.get<APIResponse<CasePage<EmergencyOverride>>>('/incidents/overrides', {
+        params: { event_id: eventId, limit: 50 },
       });
-      return response.data.data ?? [];
+      return response.data.data ?? { items: [], has_more: false, next_cursor: null };
     },
     enabled: !!eventId,
     refetchInterval: 10_000,
   });
+
+  const incidents = [...(incidentPage?.items ?? []), ...incidentHistory]
+    .filter((item, index, values) => values.findIndex((candidate) => candidate.id === item.id) === index);
+  const overrides = [...(overridePage?.items ?? []), ...overrideHistory]
+    .filter((item, index, values) => values.findIndex((candidate) => candidate.id === item.id) === index);
+
+  const loadOlderIncidents = async () => {
+    const cursor = incidentCursor ?? incidentPage?.next_cursor;
+    if (!eventId || !cursor || incidentHistoryLoading) return;
+    setIncidentHistoryLoading(true);
+    try {
+      const response = await api.get<APIResponse<CasePage<Incident>>>('/incidents', {
+        params: { event_id: eventId, limit: 50, cursor },
+      });
+      const page = response.data.data;
+      if (page) {
+        setIncidentHistory((current) => [...current, ...page.items]);
+        setIncidentCursor(page.next_cursor ?? '');
+      }
+    } finally {
+      setIncidentHistoryLoading(false);
+    }
+  };
+
+  const loadOlderOverrides = async () => {
+    const cursor = overrideCursor ?? overridePage?.next_cursor;
+    if (!eventId || !cursor || overrideHistoryLoading) return;
+    setOverrideHistoryLoading(true);
+    try {
+      const response = await api.get<APIResponse<CasePage<EmergencyOverride>>>('/incidents/overrides', {
+        params: { event_id: eventId, limit: 50, cursor },
+      });
+      const page = response.data.data;
+      if (page) {
+        setOverrideHistory((current) => [...current, ...page.items]);
+        setOverrideCursor(page.next_cursor ?? '');
+      }
+    } finally {
+      setOverrideHistoryLoading(false);
+    }
+  };
 
   const { data: administrators = [] } = useQuery({
     queryKey: ['case-administrators', eventId],
@@ -358,6 +413,16 @@ export default function IncidentsPage() {
             ))}
           </div>
         )}
+        {(incidentCursor ?? incidentPage?.next_cursor) && (
+          <button
+            type="button"
+            onClick={() => void loadOlderIncidents()}
+            disabled={incidentHistoryLoading}
+            className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium dark:border-gray-700"
+          >
+            {incidentHistoryLoading ? 'Loading history…' : 'Load older incidents'}
+          </button>
+        )}
       </section>
 
       <section className="space-y-4">
@@ -418,6 +483,16 @@ export default function IncidentsPage() {
               </article>
             ))}
           </div>
+        )}
+        {(overrideCursor ?? overridePage?.next_cursor) && (
+          <button
+            type="button"
+            onClick={() => void loadOlderOverrides()}
+            disabled={overrideHistoryLoading}
+            className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium dark:border-gray-700"
+          >
+            {overrideHistoryLoading ? 'Loading history…' : 'Load older overrides'}
+          </button>
         )}
       </section>
 
