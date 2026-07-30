@@ -15,7 +15,10 @@ The admin web dashboard for the VeriGate Access Control system.
 - **Access & area configuration**: CRUD for access levels and areas, plus assignment management.
 - **Analytics**: scan-volume-over-time and grant/deny/area/access-level/scanner breakdown charts (Recharts), backed by cached backend aggregate endpoints, with CSV export of the raw scan log.
 - **Polling-based sync monitoring**: active views refetch approximately every 10 seconds to show each device's last-sync time and online/stale/offline status. “Live” means polling, not a socket stream; dashboard/analytics backend data uses five-second cache windows retained for 15 seconds.
-- **Incident & override review**: incident reports and emergency overrides filed from the scan app, reviewable/resolvable here.
+- **Incident & override review**: incident reports and emergency overrides
+  filed from Scan use event-scoped idempotency and bounded cursor history. The
+  dashboard polls only the selected event's recent 50-row page and loads older
+  incident/override history on demand without polling backlog pages.
 
 ## 🛠️ Tech Stack
 
