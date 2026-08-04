@@ -77,6 +77,8 @@ test('creates and rereads an isolated event domain graph through the dashboard o
     });
     await create(`/events/${event.id}/members`, { user_id: attendee.id, role_in_event: 'attendee' });
     await create(`/events/${event.id}/members`, { user_id: scanner.id, role_in_event: 'scanner' });
+    await create(`/events/${otherEvent.id}/members`, { user_id: attendee.id, role_in_event: 'attendee' });
+    await create(`/events/${otherEvent.id}/members`, { user_id: scanner.id, role_in_event: 'scanner' });
     const level = await create('/access', {
       event_id: event.id,
       name: 'Compatibility Access',
@@ -94,7 +96,7 @@ test('creates and rereads an isolated event domain graph through the dashboard o
     });
     const otherArea = await create('/areas', {
       event_id: otherEvent.id,
-      name: 'Other Event Gate',
+      name: 'Authorized Gate',
       requires_scan: true,
     });
     const assignment = await create('/access/assignments', {
