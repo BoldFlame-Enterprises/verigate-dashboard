@@ -17,7 +17,9 @@ export default defineConfig({
   use: {
     ...devices['Desktop Chrome'],
     baseURL,
-    trace: 'retain-on-failure',
+    // Compatibility artifacts are uploaded by CI; raw traces may retain
+    // authorization headers, so keep diagnostics to reports and screenshots.
+    trace: 'off',
     screenshot: 'only-on-failure',
     video: 'off',
   },
