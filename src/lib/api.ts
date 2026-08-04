@@ -1,7 +1,43 @@
 import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
 import { coordinateSessionRefresh } from './sessionCoordinator';
 
-export const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+export function resolveApiBaseUrl(configured: string | undefined): string {
+  const value = configured?.trim();
+  if (!value) return '/api';
+
+  if (value.startsWith('//')) {
+    throw new Error('A same-origin API URL must use the explicit /api path');
+  }
+  if (value.startsWith('/')) {
+    if (value.replace(/\/+$/, '') !== '/api') {
+      throw new Error('A same-origin API URL must use the explicit /api path');
+    }
+    return '/api';
+  }
+
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    throw new Error('VITE_API_URL must be /api or an absolute API URL');
+  }
+  if (url.username || url.password) {
+    throw new Error('VITE_API_URL must not contain credentials');
+  }
+  if (url.search || url.hash) {
+    throw new Error('VITE_API_URL must not contain a query or fragment');
+  }
+  const loopback = url.hostname === 'localhost' || url.hostname === '127.0.0.1';
+  if (url.protocol !== 'https:' && !(url.protocol === 'http:' && loopback)) {
+    throw new Error('External VITE_API_URL values must use HTTPS');
+  }
+  if (url.pathname.replace(/\/+$/, '') !== '/api') {
+    throw new Error('VITE_API_URL must end with /api');
+  }
+  return `${url.origin}/api`;
+}
+
+export const API_BASE_URL = resolveApiBaseUrl(import.meta.env.VITE_API_URL);
 
 let accessToken: string | null = null;
 let csrfToken: string | null = null;

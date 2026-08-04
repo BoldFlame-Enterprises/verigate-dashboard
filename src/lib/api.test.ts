@@ -1,5 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { downloadAuthenticatedCsv, tokenStorage } from './api';
+import {
+  API_BASE_URL,
+  downloadAuthenticatedCsv,
+  resolveApiBaseUrl,
+  tokenStorage,
+} from './api';
 
 afterEach(() => {
   tokenStorage.clear();
@@ -14,6 +19,32 @@ describe('browser token storage', () => {
     expect(tokenStorage.getAccessToken()).toBe('access-token');
     expect(localStorage.length).toBe(0);
     expect(sessionStorage.length).toBe(0);
+  });
+});
+
+describe('browser API origin configuration', () => {
+  it('uses the same-origin API path when no deployment override is embedded', () => {
+    expect(API_BASE_URL).toBe('/api');
+    expect(resolveApiBaseUrl(undefined)).toBe('/api');
+    expect(resolveApiBaseUrl('  ')).toBe('/api');
+  });
+
+  it('accepts HTTPS external APIs and explicit loopback development APIs', () => {
+    expect(resolveApiBaseUrl('https://api.example.com/api')).toBe(
+      'https://api.example.com/api'
+    );
+    expect(resolveApiBaseUrl('http://localhost:3000/api/')).toBe(
+      'http://localhost:3000/api'
+    );
+  });
+
+  it('rejects unsafe or ambiguous external API overrides', () => {
+    expect(() => resolveApiBaseUrl('http://api.example.com/api')).toThrow(/HTTPS/);
+    expect(() => resolveApiBaseUrl('https://user:pass@api.example.com/api')).toThrow(
+      /credentials/
+    );
+    expect(() => resolveApiBaseUrl('https://api.example.com/v1')).toThrow(/\/api/);
+    expect(() => resolveApiBaseUrl('//api.example.com/api')).toThrow(/same-origin/);
   });
 });
 
