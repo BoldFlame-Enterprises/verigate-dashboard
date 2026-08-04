@@ -3,6 +3,30 @@ import { AxiosError } from 'axios';
 interface APIErrorBody {
   error?: string;
   data?: unknown;
+  request_id?: string;
+  correlation_id?: string;
+}
+
+export interface ApiSupportReference {
+  requestId?: string;
+  correlationId?: string;
+}
+
+const SAFE_TRACE_ID = /^[A-Za-z0-9._:-]{1,64}$/;
+
+function safeTraceId(value: unknown): string | undefined {
+  return typeof value === 'string' && SAFE_TRACE_ID.test(value) ? value : undefined;
+}
+
+export function getApiSupportReference(err: unknown): ApiSupportReference {
+  if (!(err instanceof AxiosError)) return {};
+  const body = err.response?.data as APIErrorBody | undefined;
+  return {
+    requestId: safeTraceId(err.response?.headers?.['x-request-id'])
+      ?? safeTraceId(body?.request_id),
+    correlationId: safeTraceId(err.response?.headers?.['x-correlation-id'])
+      ?? safeTraceId(body?.correlation_id),
+  };
 }
 
 function getValidationDetails(data: unknown): string | null {

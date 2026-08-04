@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   API_BASE_URL,
+  api,
+  createCorrelationId,
   downloadAuthenticatedCsv,
   resolveApiBaseUrl,
   tokenStorage,
@@ -23,6 +25,27 @@ describe('browser token storage', () => {
 });
 
 describe('browser API origin configuration', () => {
+  it('creates an opaque correlation identifier for a logical operation', () => {
+    expect(createCorrelationId(() => 'operation-123')).toBe('operation-123');
+  });
+
+  it('adds a correlation ID and preserves a caller-owned logical operation ID', async () => {
+    const observed: string[] = [];
+    const adapter = vi.fn(async (config) => {
+      observed.push(String(config.headers.get('X-Correlation-Id')));
+      return { data: {}, status: 200, statusText: 'OK', headers: {}, config };
+    });
+
+    await api.get('/events', { adapter });
+    await api.get('/events', {
+      adapter,
+      headers: { 'X-Correlation-Id': 'dashboard.operation-7' },
+    });
+
+    expect(observed[0]).toMatch(/^[A-Fa-f0-9-]{36}$/);
+    expect(observed[1]).toBe('dashboard.operation-7');
+  });
+
   it('uses the same-origin API path when no deployment override is embedded', () => {
     expect(API_BASE_URL).toBe('/api');
     expect(resolveApiBaseUrl(undefined)).toBe('/api');
@@ -82,7 +105,10 @@ describe('authenticated CSV downloads', () => {
 
     expect(fetch).toHaveBeenCalledWith(
       expect.stringContaining('/users/export/csv'),
-      { headers: { Authorization: 'Bearer access-token' } },
+      { headers: {
+        Authorization: 'Bearer access-token',
+        'X-Correlation-Id': expect.any(String),
+      } },
     );
     expect(click).toHaveBeenCalled();
   });
