@@ -7,6 +7,8 @@ export default defineConfig({
     environment: 'jsdom',
     setupFiles: './src/test/setup.ts',
     globals: true,
+    pool: 'threads',
+    fileParallelism: false,
   },
   server: {
     port: 5173,
