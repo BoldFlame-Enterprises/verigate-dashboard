@@ -6,7 +6,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
+    "build": "tsc && vite build && npm run build:bundle-budget",
+    "build:bundle-budget": "node scripts/check-bundle-budget.mjs",
     "preview": "vite preview",
     "audit:dependencies": "npm audit --audit-level=moderate",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",

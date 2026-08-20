@@ -106,7 +106,7 @@ describe('event-scoped device controls', () => {
     (api.get as ReturnType<typeof vi.fn>).mockReset();
     (api.post as ReturnType<typeof vi.fn>).mockReset();
     (api.get as ReturnType<typeof vi.fn>).mockResolvedValue({
-      data: { success: true, data: [registration] },
+      data: { success: true, data: { items: [registration], has_more: false, next_cursor: null } },
     });
     (api.post as ReturnType<typeof vi.fn>).mockResolvedValue({
       data: {
@@ -120,7 +120,9 @@ describe('event-scoped device controls', () => {
     renderPage();
 
     expect(await screen.findByText('Gate Operator')).toBeInTheDocument();
-    expect(api.get).toHaveBeenCalledWith('/devices/events/7');
+    expect(api.get).toHaveBeenCalledWith('/devices/events/7', expect.objectContaining({
+      params: { limit: 50, cursor: undefined },
+    }));
     expect(screen.getByText('scan-installation-12')).toBeInTheDocument();
   });
 
@@ -161,17 +163,21 @@ describe('event-scoped device controls', () => {
   it('loads immutable action history on demand', async () => {
     const user = userEvent.setup();
     (api.get as ReturnType<typeof vi.fn>)
-      .mockResolvedValueOnce({ data: { success: true, data: [registration] } })
+      .mockResolvedValueOnce({ data: { success: true, data: { items: [registration], has_more: false, next_cursor: null } } })
       .mockResolvedValueOnce({
         data: {
           success: true,
-          data: [{
-            id: 1,
-            action: 'registered',
-            actor_email: 'operator@example.com',
-            reason: 'Device session registered',
-            created_at: '2026-07-27T10:00:00.000Z',
-          }],
+          data: {
+            items: [{
+              id: 1,
+              action: 'registered',
+              actor_email: 'operator@example.com',
+              reason: 'Device session registered',
+              created_at: '2026-07-27T10:00:00.000Z',
+            }],
+            has_more: false,
+            next_cursor: null,
+          },
         },
       });
     renderPage();
@@ -180,7 +186,10 @@ describe('event-scoped device controls', () => {
     await user.click(screen.getByRole('button', { name: 'View device history' }));
 
     expect(await screen.findByText(/Device session registered/)).toBeInTheDocument();
-    expect(api.get).toHaveBeenCalledWith('/devices/events/7/registrations/12/actions');
+    expect(api.get).toHaveBeenCalledWith(
+      '/devices/events/7/registrations/12/actions',
+      expect.objectContaining({ params: { limit: 50, cursor: undefined } }),
+    );
   });
 
   it('reports a concurrent change and refreshes authoritative state', async () => {

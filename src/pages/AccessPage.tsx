@@ -1,10 +1,10 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus, Trash2, X } from 'lucide-react';
 import { api, APIResponse } from '../lib/api';
 import { getErrorMessage } from '../lib/errors';
 import { useEvent } from '../context/EventContext';
-import { AccessLevel, AccessAssignment, Area, User } from '../types';
+import { AccessLevel, AccessAssignment, Area, CursorPage, User } from '../types';
 import LoadingSpinner from '../components/LoadingSpinner';
 import ErrorState from '../components/ErrorState';
 import EmptyState from '../components/EmptyState';
@@ -24,7 +24,9 @@ export default function AccessPage() {
   const [assignAreaId, setAssignAreaId] = useState('');
   const [assignError, setAssignError] = useState<string | null>(null);
   const [userSearch, setUserSearch] = useState('');
-  const [userPage, setUserPage] = useState(1);
+  const [debouncedUserSearch, setDebouncedUserSearch] = useState('');
+  const [userCursors, setUserCursors] = useState<string[]>([]);
+  const [assignmentCursors, setAssignmentCursors] = useState<string[]>([]);
 
   const eventId = selectedEvent?.id;
 
@@ -46,29 +48,49 @@ export default function AccessPage() {
     enabled: !!eventId,
   });
 
+  useEffect(() => {
+    if (userSearch.trim() === debouncedUserSearch) return undefined;
+    const timer = window.setTimeout(() => {
+      setDebouncedUserSearch(userSearch.trim());
+      setUserCursors([]);
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [userSearch, debouncedUserSearch]);
+
+  useEffect(() => setAssignmentCursors([]), [eventId]);
+
+  const currentUserCursor = userCursors[userCursors.length - 1];
   const { data: userDirectory } = useQuery({
-    queryKey: ['users', { page: userPage, search: userSearch }],
-    queryFn: async () => {
-      const res = await api.get<APIResponse<User[]>>('/users', {
-        params: { page: userPage, limit: 25, search: userSearch || undefined, is_active: true },
+    queryKey: ['users', { cursor: currentUserCursor, search: debouncedUserSearch }],
+    queryFn: async ({ signal }) => {
+      const res = await api.get<APIResponse<CursorPage<User>>>('/users', {
+        params: {
+          cursor: currentUserCursor,
+          limit: 25,
+          search: debouncedUserSearch || undefined,
+          is_active: true,
+        },
+        signal,
       });
-      return {
-        users: res.data.data ?? [],
-        pagination: res.data.pagination ?? { page: userPage, limit: 25, total: 0, totalPages: 1 },
-      };
+      return res.data.data ?? { items: [], has_more: false, next_cursor: null };
     },
     enabled: showAssignForm,
   });
-  const users = userDirectory?.users ?? [];
+  const users = userDirectory?.items ?? [];
 
-  const { data: assignments, isLoading: assignmentsLoading, isError } = useQuery({
-    queryKey: ['assignments', eventId],
-    queryFn: async () => {
-      const res = await api.get<APIResponse<AccessAssignment[]>>('/access/assignments/list', { params: { event_id: eventId } });
-      return res.data.data ?? [];
+  const currentAssignmentCursor = assignmentCursors[assignmentCursors.length - 1];
+  const { data: assignmentPage, isLoading: assignmentsLoading, isError } = useQuery({
+    queryKey: ['assignments', eventId, currentAssignmentCursor],
+    queryFn: async ({ signal }) => {
+      const res = await api.get<APIResponse<CursorPage<AccessAssignment>>>('/access/assignments/list', {
+        params: { event_id: eventId, limit: 50, cursor: currentAssignmentCursor },
+        signal,
+      });
+      return res.data.data ?? { items: [], has_more: false, next_cursor: null };
     },
     enabled: !!eventId,
   });
+  const assignments = assignmentPage?.items ?? [];
 
   const createLevel = useMutation({
     mutationFn: async () => {
@@ -101,6 +123,7 @@ export default function AccessPage() {
       setAssignUserId('');
       setAssignLevelId('');
       setAssignAreaId('');
+      setAssignmentCursors([]);
     },
     onError: (err: unknown) => setAssignError(getErrorMessage(err)),
   });
@@ -192,7 +215,7 @@ export default function AccessPage() {
                 value={userSearch}
                 onChange={(event) => {
                   setUserSearch(event.target.value);
-                  setUserPage(1);
+                  setUserCursors([]);
                   setAssignUserId('');
                 }}
                 placeholder="Search users by name or email"
@@ -217,22 +240,26 @@ export default function AccessPage() {
               </div>
               <div className="flex items-center justify-between text-sm text-gray-600 dark:text-gray-400">
                 <span>
-                  User page {userDirectory?.pagination.page ?? userPage} of {userDirectory?.pagination.totalPages ?? 1}
-                  {' · '}{userDirectory?.pagination.total ?? 0} matches
+                  User page {userCursors.length + 1} · {users.length} matches shown
                 </span>
                 <div className="flex gap-2">
                   <button
                     type="button"
-                    onClick={() => { setUserPage((value) => Math.max(1, value - 1)); setAssignUserId(''); }}
-                    disabled={userPage <= 1}
+                    onClick={() => { setUserCursors((value) => value.slice(0, -1)); setAssignUserId(''); }}
+                    disabled={userCursors.length === 0}
                     className="rounded border px-3 py-1 disabled:opacity-40 dark:border-gray-700"
                   >
                     Previous users
                   </button>
                   <button
                     type="button"
-                    onClick={() => { setUserPage((value) => value + 1); setAssignUserId(''); }}
-                    disabled={userPage >= (userDirectory?.pagination.totalPages ?? 1)}
+                    onClick={() => {
+                      if (userDirectory?.next_cursor) {
+                        setUserCursors((value) => [...value, userDirectory.next_cursor!]);
+                        setAssignUserId('');
+                      }
+                    }}
+                    disabled={!userDirectory?.has_more || !userDirectory.next_cursor}
                     className="rounded border px-3 py-1 disabled:opacity-40 dark:border-gray-700"
                   >
                     Next users
@@ -285,6 +312,23 @@ export default function AccessPage() {
                 ))}
               </tbody>
             </table>
+          </div>
+        )}
+        {(assignmentCursors.length > 0 || assignmentPage?.has_more) && (
+          <div className="flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setAssignmentCursors((value) => value.slice(0, -1))}
+              disabled={assignmentCursors.length === 0}
+              className="rounded border px-3 py-1 text-sm disabled:opacity-40 dark:border-gray-700"
+            >Previous assignments</button>
+            <button
+              type="button"
+              onClick={() => assignmentPage?.next_cursor &&
+                setAssignmentCursors((value) => [...value, assignmentPage.next_cursor!])}
+              disabled={!assignmentPage?.has_more || !assignmentPage.next_cursor}
+              className="rounded border px-3 py-1 text-sm disabled:opacity-40 dark:border-gray-700"
+            >Next assignments</button>
           </div>
         )}
       </section>

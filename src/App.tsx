@@ -1,21 +1,24 @@
+import { lazy, Suspense } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import Layout from './components/Layout';
 import ProtectedRoute from './components/ProtectedRoute';
-import LoginPage from './pages/LoginPage';
-import DashboardPage from './pages/DashboardPage';
-import UsersPage from './pages/UsersPage';
-import AreasPage from './pages/AreasPage';
-import AccessPage from './pages/AccessPage';
-import AnalyticsPage from './pages/AnalyticsPage';
-import SyncMonitorPage from './pages/SyncMonitorPage';
-import IncidentsPage from './pages/IncidentsPage';
-import EventsPage from './pages/EventsPage';
-import ActivateAccountPage from './pages/ActivateAccountPage';
-import ResetPasswordPage from './pages/ResetPasswordPage';
-import ChangePasswordPage from './pages/ChangePasswordPage';
-import SettingsPage from './pages/SettingsPage';
+import LoadingSpinner from './components/LoadingSpinner';
 import { useAuth } from './context/AuthContext';
 import { useEvent } from './context/EventContext';
+
+const LoginPage = lazy(() => import('./pages/LoginPage'));
+const DashboardPage = lazy(() => import('./pages/DashboardPage'));
+const UsersPage = lazy(() => import('./pages/UsersPage'));
+const AreasPage = lazy(() => import('./pages/AreasPage'));
+const AccessPage = lazy(() => import('./pages/AccessPage'));
+const AnalyticsPage = lazy(() => import('./pages/AnalyticsPage'));
+const SyncMonitorPage = lazy(() => import('./pages/SyncMonitorPage'));
+const IncidentsPage = lazy(() => import('./pages/IncidentsPage'));
+const EventsPage = lazy(() => import('./pages/EventsPage'));
+const ActivateAccountPage = lazy(() => import('./pages/ActivateAccountPage'));
+const ResetPasswordPage = lazy(() => import('./pages/ResetPasswordPage'));
+const ChangePasswordPage = lazy(() => import('./pages/ChangePasswordPage'));
+const SettingsPage = lazy(() => import('./pages/SettingsPage'));
 
 function DashboardLanding() {
   const { user } = useAuth();
@@ -28,7 +31,8 @@ function DashboardLanding() {
 
 export default function App() {
   return (
-    <Routes>
+    <Suspense fallback={<LoadingSpinner label="Loading page..." />}>
+      <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route path="/activate" element={<ActivateAccountPage />} />
       <Route path="/reset-password" element={<ResetPasswordPage />} />
@@ -78,6 +82,7 @@ export default function App() {
           </Route>
         </Route>
       </Route>
-    </Routes>
+      </Routes>
+    </Suspense>
   );
 }

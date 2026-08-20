@@ -50,6 +50,10 @@ const event = {
   capabilities: ['manage_event_devices', 'manage_operational_cases'],
 };
 
+function cursorPage<T>(items: T[], nextCursor: string | null = null) {
+  return { items, has_more: nextCursor !== null, next_cursor: nextCursor };
+}
+
 function apiError(error: string): AxiosError {
   const failure = new AxiosError('Request failed with status code 400');
   failure.response = {
@@ -76,16 +80,14 @@ describe('UsersPage pagination', () => {
         return { data: { success: true, data: [event] } } as never;
       }
       if (path === '/events/7/members') {
-        return { data: { success: true, data: [] } } as never;
+        return { data: { success: true, data: cursorPage([]) } } as never;
       }
-      const page = Number(config?.params?.page ?? 1);
       const limit = Number(config?.params?.limit ?? 50);
-      const start = (page - 1) * limit;
+      const start = config?.params?.cursor === 'users-2' ? 50 : 0;
       return {
         data: {
           success: true,
-          data: users.slice(start, start + limit),
-          pagination: { page, limit, total: users.length, totalPages: 2 },
+          data: cursorPage(users.slice(start, start + limit), start === 0 ? 'users-2' : null),
         },
       } as never;
     });
@@ -99,10 +101,10 @@ describe('UsersPage pagination', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Next' }));
 
     expect(await screen.findByText('User 51')).toBeInTheDocument();
-    expect(screen.getByText(/Page 2 of 2 · 51 users/)).toBeInTheDocument();
-    await waitFor(() => expect(api.get).toHaveBeenLastCalledWith('/users', {
-      params: { page: 2, limit: 50, search: undefined },
-    }));
+    expect(screen.getByText(/Page 2 · 1 users shown/)).toBeInTheDocument();
+    await waitFor(() => expect(api.get).toHaveBeenLastCalledWith('/users', expect.objectContaining({
+      params: expect.objectContaining({ cursor: 'users-2', limit: 50 }),
+    })));
   }, 10_000);
 
   it('requires a reason and uses the versioned lifecycle endpoint to suspend access', async () => {
@@ -140,6 +142,7 @@ describe('event administration membership management', () => {
     name: 'Event Operator',
     email: 'event@example.com',
     role: 'user',
+    is_event_admin: true,
   };
   const standardUser = {
     ...users[2],
@@ -165,8 +168,7 @@ describe('event administration membership management', () => {
         return {
           data: {
             success: true,
-            data: [globalAdministrator, eventAdministrator],
-            pagination: { page: 1, limit: 50, total: 2, totalPages: 1 },
+            data: cursorPage([globalAdministrator, eventAdministrator]),
           },
         } as never;
       }
@@ -177,7 +179,7 @@ describe('event administration membership management', () => {
         return {
           data: {
             success: true,
-            data: [{
+            data: cursorPage([{
               id: 11,
               user_id: eventAdministrator.id,
               name: eventAdministrator.name,
@@ -186,7 +188,7 @@ describe('event administration membership management', () => {
               role_in_event: 'admin',
               is_active: true,
               joined_at: '2026-01-02T00:00:00.000Z',
-            }],
+            }]),
           },
         } as never;
       }
@@ -232,8 +234,10 @@ describe('event administration membership management', () => {
         return {
           data: {
             success: true,
-            data: [globalAdministrator, standardUser],
-            pagination: { page: 1, limit: 50, total: 2, totalPages: 1 },
+            data: cursorPage([
+              globalAdministrator,
+              { ...standardUser, is_event_admin: membershipGranted },
+            ]),
           },
         } as never;
       }
@@ -244,7 +248,7 @@ describe('event administration membership management', () => {
         return {
           data: {
             success: true,
-            data: membershipGranted ? [{
+            data: cursorPage(membershipGranted ? [{
               id: 12,
               user_id: standardUser.id,
               name: standardUser.name,
@@ -253,7 +257,7 @@ describe('event administration membership management', () => {
               role_in_event: 'admin',
               is_active: true,
               joined_at: '2026-01-02T00:00:00.000Z',
-            }] : [],
+            }] : []),
           },
         } as never;
       }
@@ -294,8 +298,7 @@ describe('event administration membership management', () => {
         return {
           data: {
             success: true,
-            data: [eventAdministrator],
-            pagination: { page: 1, limit: 50, total: 1, totalPages: 1 },
+            data: cursorPage([eventAdministrator]),
           },
         } as never;
       }
@@ -306,7 +309,7 @@ describe('event administration membership management', () => {
         return {
           data: {
             success: true,
-            data: [{
+            data: cursorPage([{
               id: 11,
               user_id: eventAdministrator.id,
               name: eventAdministrator.name,
@@ -315,7 +318,7 @@ describe('event administration membership management', () => {
               role_in_event: 'admin',
               is_active: true,
               joined_at: '2026-01-02T00:00:00.000Z',
-            }],
+            }]),
           },
         } as never;
       }
@@ -351,8 +354,7 @@ describe('event administration membership management', () => {
         return {
           data: {
             success: true,
-            data: [standardUser],
-            pagination: { page: 1, limit: 50, total: 1, totalPages: 1 },
+            data: cursorPage([standardUser]),
           },
         } as never;
       }
@@ -360,7 +362,7 @@ describe('event administration membership management', () => {
         return { data: { success: true, data: [event] } } as never;
       }
       if (path === '/events/7/members') {
-        return { data: { success: true, data: [] } } as never;
+        return { data: { success: true, data: cursorPage([]) } } as never;
       }
       throw new Error(`Unexpected GET ${path}`);
     });

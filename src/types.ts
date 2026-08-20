@@ -13,6 +13,7 @@ export interface User {
   status_changed_at?: string;
   created_at: string;
   updated_at: string;
+  is_event_admin?: boolean;
 }
 
 export interface AuthUser {
@@ -207,6 +208,8 @@ export interface CasePage<T> {
   has_more: boolean;
   next_cursor: string | null;
 }
+
+export type CursorPage<T> = CasePage<T>;
 
 export interface CaseAdministrator {
   id: number;

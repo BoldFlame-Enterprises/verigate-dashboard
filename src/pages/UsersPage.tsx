@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 import { api, APIResponse, downloadAuthenticatedCsv } from '../lib/api';
 import { getErrorMessage } from '../lib/errors';
-import { AccountStatus, Event, EventMembership, User, UserRole } from '../types';
+import { AccountStatus, CursorPage, Event, EventMembership, User, UserRole } from '../types';
 import { useEvent } from '../context/EventContext';
 import LoadingSpinner from '../components/LoadingSpinner';
 import ErrorState from '../components/ErrorState';
@@ -115,8 +115,9 @@ export default function UsersPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [importResult, setImportResult] = useState<string | null>(null);
   const [activationToken, setActivationToken] = useState<string | null>(null);
-  const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [userCursors, setUserCursors] = useState<string[]>([]);
   const [accessUser, setAccessUser] = useState<User | null>(null);
   const [membershipEventId, setMembershipEventId] = useState<number | null>(null);
   const [membershipMessage, setMembershipMessage] = useState<string | null>(null);
@@ -131,45 +132,32 @@ export default function UsersPage() {
   const dialogCloseRef = useRef<HTMLButtonElement | null>(null);
   const membershipMutationPendingRef = useRef(false);
 
-  const { data: usersPage, isLoading, isError } = useQuery({
-    queryKey: ['users', { page, search }],
-    queryFn: async () => {
-      const res = await api.get<APIResponse<User[]>>('/users', {
-        params: { page, limit: 50, search: search || undefined },
-      });
-      return {
-        users: res.data.data ?? [],
-        pagination: res.data.pagination ?? { page, limit: 50, total: 0, totalPages: 1 },
-      };
-    },
-  });
-  const users = useMemo(() => usersPage?.users ?? [], [usersPage?.users]);
-  const pagination = usersPage?.pagination;
+  useEffect(() => {
+    if (search.trim() === debouncedSearch) return undefined;
+    const timer = window.setTimeout(() => {
+      setDebouncedSearch(search.trim());
+      setUserCursors([]);
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [search, debouncedSearch]);
 
-  const {
-    data: selectedEventMemberships = [],
-    isLoading: selectedEventMembershipsLoading,
-    isError: selectedEventMembershipsError,
-  } = useQuery({
-    queryKey: ['event-members', selectedEvent?.id],
-    queryFn: async () => {
-      const res = await api.get<APIResponse<EventMembership[]>>(
-        `/events/${selectedEvent!.id}/members`
-      );
-      return res.data.data ?? [];
+  const currentUserCursor = userCursors[userCursors.length - 1];
+  const { data: usersPage, isLoading, isError } = useQuery({
+    queryKey: ['users', { cursor: currentUserCursor, search: debouncedSearch, eventId: selectedEvent?.id }],
+    queryFn: async ({ signal }) => {
+      const res = await api.get<APIResponse<CursorPage<User>>>('/users', {
+        params: {
+          cursor: currentUserCursor,
+          limit: 50,
+          search: debouncedSearch || undefined,
+          event_id: selectedEvent?.id,
+        },
+        signal,
+      });
+      return res.data.data ?? { items: [], has_more: false, next_cursor: null };
     },
-    enabled: selectedEvent !== null,
   });
-  const selectedEventAdministratorIds = useMemo(
-    () => new Set(
-      selectedEventMemberships
-        .filter((membership) =>
-          membership.is_active && membership.role_in_event === 'admin'
-        )
-        .map((membership) => membership.user_id)
-    ),
-    [selectedEventMemberships]
-  );
+  const users = useMemo(() => usersPage?.items ?? [], [usersPage?.items]);
 
   const {
     data: events = [],
@@ -195,12 +183,13 @@ export default function UsersPage() {
     isError: dialogMembershipsError,
     refetch: refetchMemberships,
   } = useQuery({
-    queryKey: ['event-members', selectedMembershipEventId],
+    queryKey: ['event-members', selectedMembershipEventId, accessUser?.id],
     queryFn: async () => {
-      const res = await api.get<APIResponse<EventMembership[]>>(
-        `/events/${selectedMembershipEventId}/members`
+      const res = await api.get<APIResponse<CursorPage<EventMembership>>>(
+        `/events/${selectedMembershipEventId}/members`,
+        { params: { user_id: accessUser!.id, limit: 1 } },
       );
-      return res.data.data ?? [];
+      return res.data.data?.items ?? [];
     },
     enabled: accessUser !== null && selectedMembershipEventId !== null,
   });
@@ -275,6 +264,16 @@ export default function UsersPage() {
       queryClient.invalidateQueries({
         queryKey: ['event-members', selectedMembershipEventId],
       });
+      queryClient.setQueriesData<CursorPage<User>>(
+        { queryKey: ['users'] },
+        (page) => page ? {
+          ...page,
+          items: page.items.map((candidate) => candidate.id === user.id
+            ? { ...candidate, is_event_admin: true }
+            : candidate),
+        } : page,
+      );
+      queryClient.invalidateQueries({ queryKey: ['users'] });
     },
     onError: (error: unknown) => {
       setMembershipMessage(null);
@@ -301,6 +300,16 @@ export default function UsersPage() {
       queryClient.invalidateQueries({
         queryKey: ['event-members', selectedMembershipEventId],
       });
+      queryClient.setQueriesData<CursorPage<User>>(
+        { queryKey: ['users'] },
+        (page) => page ? {
+          ...page,
+          items: page.items.map((candidate) => candidate.id === user.id
+            ? { ...candidate, is_event_admin: false }
+            : candidate),
+        } : page,
+      );
+      queryClient.invalidateQueries({ queryKey: ['users'] });
     },
     onError: (error: unknown) => {
       setMembershipMessage(null);
@@ -435,7 +444,7 @@ export default function UsersPage() {
           value={search}
           onChange={(event) => {
             setSearch(event.target.value);
-            setPage(1);
+            setUserCursors([]);
           }}
           placeholder="Search by name or email"
           className="w-full rounded-md border border-gray-300 px-3 py-2 dark:border-gray-700 dark:bg-gray-800"
@@ -544,9 +553,9 @@ export default function UsersPage() {
                   const authority = accountAuthority(u);
                   const selectedEventAuthority = eventAuthority(u, {
                     hasSelectedEvent: selectedEvent !== null,
-                    isLoading: selectedEventMembershipsLoading,
-                    isError: selectedEventMembershipsError,
-                    isEventAdministrator: selectedEventAdministratorIds.has(u.id),
+                    isLoading: false,
+                    isError: false,
+                    isEventAdministrator: u.is_event_admin === true,
                   });
                   const accountStatus = currentAccountStatus(u);
                   const statusClass = accountStatus === 'active'
@@ -650,21 +659,25 @@ export default function UsersPage() {
           </div>
           <div className="flex items-center justify-between border-t border-gray-200 px-4 py-3 text-sm dark:border-gray-800">
             <span>
-              Page {pagination?.page ?? page} of {pagination?.totalPages ?? 1} · {pagination?.total ?? users.length} users
+              Page {userCursors.length + 1} · {users.length} users shown
             </span>
             <div className="flex gap-2">
               <button
                 type="button"
-                onClick={() => setPage((value) => Math.max(1, value - 1))}
-                disabled={page <= 1}
+                onClick={() => setUserCursors((value) => value.slice(0, -1))}
+                disabled={userCursors.length === 0}
                 className="rounded border px-3 py-1 disabled:opacity-40 dark:border-gray-700"
               >
                 Previous
               </button>
               <button
                 type="button"
-                onClick={() => setPage((value) => value + 1)}
-                disabled={page >= (pagination?.totalPages ?? 1)}
+                onClick={() => {
+                  if (usersPage?.next_cursor) {
+                    setUserCursors((value) => [...value, usersPage.next_cursor!]);
+                  }
+                }}
+                disabled={!usersPage?.has_more || !usersPage.next_cursor}
                 className="rounded border px-3 py-1 disabled:opacity-40 dark:border-gray-700"
               >
                 Next

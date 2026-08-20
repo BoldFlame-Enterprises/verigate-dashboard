@@ -12,6 +12,7 @@ import {
 import { api, APIResponse } from '../lib/api';
 import { useEvent } from '../context/EventContext';
 import {
+  CursorPage,
   DeviceRegistration,
   DeviceRegistrationAction,
 } from '../types';
@@ -87,30 +88,36 @@ export default function SyncMonitorPage() {
   const [reason, setReason] = useState('');
   const [historyRegistration, setHistoryRegistration] = useState<DeviceRegistration | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
+  const [registrationCursors, setRegistrationCursors] = useState<string[]>([]);
+  const [historyCursors, setHistoryCursors] = useState<string[]>([]);
+  const registrationCursor = registrationCursors[registrationCursors.length - 1];
+  const historyCursor = historyCursors[historyCursors.length - 1];
 
   const {
-    data: registrations,
+    data: registrationPage,
     isLoading,
     isError,
   } = useQuery({
-    queryKey: ['device-registrations', eventId],
-    queryFn: async () => {
-      const response = await api.get<APIResponse<DeviceRegistration[]>>(
-        `/devices/events/${eventId}`
+    queryKey: ['device-registrations', eventId, registrationCursor],
+    queryFn: async ({ signal }) => {
+      const response = await api.get<APIResponse<CursorPage<DeviceRegistration>>>(
+        `/devices/events/${eventId}`,
+        { params: { limit: 50, cursor: registrationCursor }, signal },
       );
-      return response.data.data ?? [];
+      return response.data.data ?? { items: [], has_more: false, next_cursor: null };
     },
     enabled: !!eventId,
     refetchInterval: 10_000,
   });
 
   const history = useQuery({
-    queryKey: ['device-registration-actions', eventId, historyRegistration?.id],
-    queryFn: async () => {
-      const response = await api.get<APIResponse<DeviceRegistrationAction[]>>(
-        `/devices/events/${eventId}/registrations/${historyRegistration!.id}/actions`
+    queryKey: ['device-registration-actions', eventId, historyRegistration?.id, historyCursor],
+    queryFn: async ({ signal }) => {
+      const response = await api.get<APIResponse<CursorPage<DeviceRegistrationAction>>>(
+        `/devices/events/${eventId}/registrations/${historyRegistration!.id}/actions`,
+        { params: { limit: 50, cursor: historyCursor }, signal },
       );
-      return response.data.data ?? [];
+      return response.data.data ?? { items: [], has_more: false, next_cursor: null };
     },
     enabled: !!eventId && !!historyRegistration,
   });
@@ -150,6 +157,7 @@ export default function SyncMonitorPage() {
   if (!selectedEvent) return <EmptyState title="No event selected" />;
   if (isLoading) return <LoadingSpinner label="Loading registered devices..." />;
   if (isError) return <ErrorState />;
+  const registrations = registrationPage?.items ?? [];
 
   const openAction = (registration: DeviceRegistration, action: DeviceAction) => {
     setPendingAction({ registration, action });
@@ -260,7 +268,10 @@ export default function SyncMonitorPage() {
                           <button
                             type="button"
                             aria-label="View device history"
-                            onClick={() => setHistoryRegistration(registration)}
+                            onClick={() => {
+                              setHistoryCursors([]);
+                              setHistoryRegistration(registration);
+                            }}
                             className="rounded-md border border-gray-300 p-2 text-gray-600 transition-colors hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-brand-600 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800"
                           >
                             <History className="h-4 w-4" />
@@ -308,6 +319,24 @@ export default function SyncMonitorPage() {
               </tbody>
             </table>
           </div>
+        </div>
+      )}
+
+      {(registrationCursors.length > 0 || registrationPage?.has_more) && (
+        <div className="flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={() => setRegistrationCursors((value) => value.slice(0, -1))}
+            disabled={registrationCursors.length === 0}
+            className="rounded border px-3 py-1 text-sm disabled:opacity-40 dark:border-gray-700"
+          >Previous devices</button>
+          <button
+            type="button"
+            onClick={() => registrationPage?.next_cursor &&
+              setRegistrationCursors((value) => [...value, registrationPage.next_cursor!])}
+            disabled={!registrationPage?.has_more || !registrationPage.next_cursor}
+            className="rounded border px-3 py-1 text-sm disabled:opacity-40 dark:border-gray-700"
+          >Next devices</button>
         </div>
       )}
 
@@ -384,7 +413,10 @@ export default function SyncMonitorPage() {
               <button
                 type="button"
                 aria-label="Close device history"
-                onClick={() => setHistoryRegistration(null)}
+                onClick={() => {
+                  setHistoryRegistration(null);
+                  setHistoryCursors([]);
+                }}
                 className="rounded-md p-2 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-brand-600 dark:hover:bg-gray-800"
               >
                 <X className="h-4 w-4" />
@@ -395,11 +427,11 @@ export default function SyncMonitorPage() {
             <div className="py-6"><LoadingSpinner /></div>
           ) : history.isError ? (
             <div className="py-4"><ErrorState /></div>
-          ) : !history.data?.length ? (
+          ) : !history.data?.items.length ? (
             <p className="py-6 text-sm text-gray-500">No authority changes recorded.</p>
           ) : (
             <ol className="mt-4 divide-y divide-gray-100 dark:divide-gray-800">
-              {history.data.map((action) => (
+              {history.data.items.map((action) => (
                 <li key={action.id} className="grid gap-1 py-3 sm:grid-cols-[10rem_1fr_auto] sm:gap-4">
                   <span className="font-medium capitalize">{action.action.replace('-', ' ')}</span>
                   <span className="text-sm text-gray-600 dark:text-gray-300">
@@ -409,6 +441,23 @@ export default function SyncMonitorPage() {
                 </li>
               ))}
             </ol>
+          )}
+          {(historyCursors.length > 0 || history.data?.has_more) && (
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setHistoryCursors((value) => value.slice(0, -1))}
+                disabled={historyCursors.length === 0}
+                className="rounded border px-3 py-1 text-sm disabled:opacity-40 dark:border-gray-700"
+              >Newer actions</button>
+              <button
+                type="button"
+                onClick={() => history.data?.next_cursor &&
+                  setHistoryCursors((value) => [...value, history.data.next_cursor!])}
+                disabled={!history.data?.has_more || !history.data.next_cursor}
+                className="rounded border px-3 py-1 text-sm disabled:opacity-40 dark:border-gray-700"
+              >Older actions</button>
+            </div>
           )}
         </section>
       )}

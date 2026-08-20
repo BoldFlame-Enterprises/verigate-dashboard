@@ -40,14 +40,18 @@ describe('AccessPage assignment directory', () => {
   beforeEach(() => {
     vi.mocked(api.get).mockImplementation(async (path, config) => {
       if (path === '/users') {
-        const page = Number(config?.params?.page ?? 1);
         const limit = Number(config?.params?.limit ?? 25);
-        const start = (page - 1) * limit;
+        const cursor = config?.params?.cursor;
+        const start = cursor === 'users-3' ? 50 : cursor === 'users-2' ? 25 : 0;
+        const items = users.slice(start, start + limit);
         return {
           data: {
             success: true,
-            data: users.slice(start, start + limit),
-            pagination: { page, limit, total: users.length, totalPages: 3 },
+            data: {
+              items,
+              has_more: start + limit < users.length,
+              next_cursor: start === 0 ? 'users-2' : start === 25 ? 'users-3' : null,
+            },
           },
         } as never;
       }
@@ -57,7 +61,7 @@ describe('AccessPage assignment directory', () => {
       if (path === '/areas') {
         return { data: { success: true, data: [{ id: 2, event_id: 7, name: 'Arena', requires_scan: true, is_active: true }] } } as never;
       }
-      return { data: { success: true, data: [] } } as never;
+      return { data: { success: true, data: { items: [], has_more: false, next_cursor: null } } } as never;
     });
   });
 
@@ -71,8 +75,8 @@ describe('AccessPage assignment directory', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Next users' }));
     expect(await screen.findByRole('option', { name: /^Directory User 51 ·/ })).toBeInTheDocument();
 
-    await waitFor(() => expect(api.get).toHaveBeenCalledWith('/users', {
-      params: { page: 3, limit: 25, search: undefined, is_active: true },
-    }));
+    await waitFor(() => expect(api.get).toHaveBeenCalledWith('/users', expect.objectContaining({
+      params: expect.objectContaining({ cursor: 'users-3', limit: 25, is_active: true }),
+    })));
   });
 });
