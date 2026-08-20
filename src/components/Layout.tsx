@@ -9,6 +9,7 @@ import {
   AlertTriangle,
   CalendarDays,
   LogOut,
+  Settings,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useEvent } from '../context/EventContext';
@@ -29,6 +30,7 @@ const navItems: Array<{
   { to: '/sync-monitor', label: 'Sync Monitor', icon: Radio, capability: 'manage_event_devices' },
   { to: '/incidents', label: 'Incidents & Overrides', icon: AlertTriangle, capability: 'manage_operational_cases' },
   { to: '/events', label: 'Events', icon: CalendarDays, globalOnly: true },
+  { to: '/settings', label: 'Global Settings', icon: Settings, globalOnly: true },
 ];
 
 export default function Layout() {

@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Download,
+  PauseCircle,
+  PlayCircle,
   Plus,
   ShieldCheck,
   ShieldPlus,
@@ -11,7 +13,7 @@ import {
 } from 'lucide-react';
 import { api, APIResponse, downloadAuthenticatedCsv } from '../lib/api';
 import { getErrorMessage } from '../lib/errors';
-import { Event, EventMembership, User, UserRole } from '../types';
+import { AccountStatus, Event, EventMembership, User, UserRole } from '../types';
 import { useEvent } from '../context/EventContext';
 import LoadingSpinner from '../components/LoadingSpinner';
 import ErrorState from '../components/ErrorState';
@@ -26,6 +28,10 @@ interface NewUserForm {
 }
 
 const emptyForm: NewUserForm = { email: '', name: '', phone: '', role: 'user' };
+
+function currentAccountStatus(user: User): AccountStatus {
+  return user.account_status ?? (user.is_active ? 'active' : 'deactivated');
+}
 
 function accountAuthority(user: User) {
   if (user.role === 'admin') {
@@ -55,16 +61,19 @@ function eventAuthority(
     isEventAdministrator: boolean;
   }
 ) {
+  const accountStatus = currentAccountStatus(user);
+  if (accountStatus !== 'active') {
+    return {
+      label: accountStatus === 'suspended' ? 'Suspended account' : 'Deactivated account',
+      className: accountStatus === 'suspended'
+        ? 'bg-amber-100 text-amber-800 dark:bg-amber-500/15 dark:text-amber-200'
+        : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300',
+    };
+  }
   if (user.role === 'admin') {
     return {
       label: 'Administrator via global role',
       className: 'bg-brand-100 text-brand-800 dark:bg-brand-500/20 dark:text-brand-200',
-    };
-  }
-  if (!user.is_active) {
-    return {
-      label: 'Inactive account',
-      className: 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300',
     };
   }
   if (!state.hasSelectedEvent) {
@@ -113,6 +122,10 @@ export default function UsersPage() {
   const [membershipMessage, setMembershipMessage] = useState<string | null>(null);
   const [membershipError, setMembershipError] = useState<string | null>(null);
   const [confirmRemoval, setConfirmRemoval] = useState(false);
+  const [statusUser, setStatusUser] = useState<User | null>(null);
+  const [targetStatus, setTargetStatus] = useState<AccountStatus | null>(null);
+  const [statusReason, setStatusReason] = useState('');
+  const [statusError, setStatusError] = useState<string | null>(null);
   const accessTriggerRef = useRef<HTMLButtonElement | null>(null);
   const dialogRef = useRef<HTMLDivElement | null>(null);
   const dialogCloseRef = useRef<HTMLButtonElement | null>(null);
@@ -214,10 +227,32 @@ export default function UsersPage() {
     onError: (err: unknown) => setFormError(getErrorMessage(err)),
   });
 
-  const deactivateUser = useMutation({
-    mutationFn: async (id: number) => api.delete(`/users/${id}`),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['users'] }),
+  const changeAccountStatus = useMutation({
+    mutationFn: async ({ user, status, reason }: {
+      user: User;
+      status: AccountStatus;
+      reason: string;
+    }) => api.put(`/users/${user.id}/status`, {
+      status,
+      expected_status: currentAccountStatus(user),
+      reason,
+    }),
+    onSuccess: () => {
+      setStatusUser(null);
+      setTargetStatus(null);
+      setStatusReason('');
+      setStatusError(null);
+      queryClient.invalidateQueries({ queryKey: ['users'] });
+    },
+    onError: (error: unknown) => setStatusError(getErrorMessage(error)),
   });
+
+  function openStatusDialog(user: User, status: AccountStatus) {
+    setStatusUser(user);
+    setTargetStatus(status);
+    setStatusReason('');
+    setStatusError(null);
+  }
 
   const grantEventAdministration = useMutation({
     mutationFn: async () => {
@@ -513,9 +548,15 @@ export default function UsersPage() {
                     isError: selectedEventMembershipsError,
                     isEventAdministrator: selectedEventAdministratorIds.has(u.id),
                   });
-                  const statusClass = u.is_active
+                  const accountStatus = currentAccountStatus(u);
+                  const statusClass = accountStatus === 'active'
                     ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300'
-                    : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300';
+                    : accountStatus === 'suspended'
+                      ? 'bg-amber-100 text-amber-800 dark:bg-amber-500/15 dark:text-amber-200'
+                      : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300';
+                  const statusLabel = accountStatus === 'active'
+                    ? 'Active'
+                    : accountStatus === 'suspended' ? 'Suspended' : 'Deactivated';
                   return (
                     <tr key={u.id} className="border-t border-gray-100 dark:border-gray-800">
                       <td className="px-4 py-2">{u.name}</td>
@@ -534,7 +575,7 @@ export default function UsersPage() {
                       </td>
                       <td className="px-4 py-2">
                         <span className={`rounded-full px-2 py-0.5 text-xs ${statusClass}`}>
-                          {u.is_active ? 'Active' : 'Inactive'}
+                          {statusLabel}
                         </span>
                       </td>
                       <td className="px-4 py-2 text-right">
@@ -551,15 +592,51 @@ export default function UsersPage() {
                               </button>
                             </Tooltip>
                           )}
-                          {u.is_active && (
+                          {accountStatus === 'active' && (
+                            <Tooltip content="Temporarily suspend user">
+                              <button
+                                type="button"
+                                aria-label={`Suspend ${u.name}`}
+                                onClick={() => openStatusDialog(u, 'suspended')}
+                                className="rounded-md p-2 text-amber-600 transition-colors hover:bg-amber-50 hover:text-amber-800 focus:outline-none focus:ring-2 focus:ring-amber-500 dark:text-amber-300 dark:hover:bg-amber-950/40 dark:hover:text-amber-200"
+                              >
+                                <PauseCircle className="h-4 w-4" aria-hidden="true" />
+                              </button>
+                            </Tooltip>
+                          )}
+                          {accountStatus === 'suspended' && (
+                            <Tooltip content="Resume user access">
+                              <button
+                                type="button"
+                                aria-label={`Resume ${u.name}`}
+                                onClick={() => openStatusDialog(u, 'active')}
+                                className="rounded-md p-2 text-emerald-600 transition-colors hover:bg-emerald-50 hover:text-emerald-800 focus:outline-none focus:ring-2 focus:ring-emerald-500 dark:text-emerald-300 dark:hover:bg-emerald-950/40 dark:hover:text-emerald-200"
+                              >
+                                <PlayCircle className="h-4 w-4" aria-hidden="true" />
+                              </button>
+                            </Tooltip>
+                          )}
+                          {accountStatus !== 'deactivated' && (
                             <Tooltip content="Deactivate user">
                               <button
                                 type="button"
                                 aria-label={`Deactivate ${u.name}`}
-                                onClick={() => deactivateUser.mutate(u.id)}
+                                onClick={() => openStatusDialog(u, 'deactivated')}
                                 className="rounded-md p-2 text-red-600 transition-colors hover:bg-red-50 hover:text-red-800 focus:outline-none focus:ring-2 focus:ring-red-500 dark:text-red-300 dark:hover:bg-red-950/40 dark:hover:text-red-200"
                               >
                                 <Trash2 className="h-4 w-4" aria-hidden="true" />
+                              </button>
+                            </Tooltip>
+                          )}
+                          {accountStatus === 'deactivated' && (
+                            <Tooltip content="Reactivate account without restoring prior event access">
+                              <button
+                                type="button"
+                                aria-label={`Reactivate ${u.name}`}
+                                onClick={() => openStatusDialog(u, 'active')}
+                                className="rounded-md p-2 text-emerald-600 transition-colors hover:bg-emerald-50 hover:text-emerald-800 focus:outline-none focus:ring-2 focus:ring-emerald-500 dark:text-emerald-300 dark:hover:bg-emerald-950/40 dark:hover:text-emerald-200"
+                              >
+                                <PlayCircle className="h-4 w-4" aria-hidden="true" />
                               </button>
                             </Tooltip>
                           )}
@@ -594,6 +671,90 @@ export default function UsersPage() {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {statusUser && targetStatus && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-950/75 p-4">
+          <form
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="account-status-dialog-title"
+            onSubmit={(event) => {
+              event.preventDefault();
+              changeAccountStatus.mutate({
+                user: statusUser,
+                status: targetStatus,
+                reason: statusReason.trim(),
+              });
+            }}
+            className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl shadow-black/30 dark:bg-gray-900"
+          >
+            <h2 id="account-status-dialog-title" className="text-lg font-semibold">
+              {targetStatus === 'suspended'
+                ? `Suspend ${statusUser.name}`
+                : targetStatus === 'deactivated'
+                  ? `Deactivate ${statusUser.name}`
+                  : currentAccountStatus(statusUser) === 'suspended'
+                    ? `Resume ${statusUser.name}`
+                    : `Reactivate ${statusUser.name}`}
+            </h2>
+            <p className="mt-2 text-sm leading-6 text-gray-600 dark:text-gray-300">
+              {targetStatus === 'suspended'
+                ? 'Suspension immediately revokes sessions and device credentials while preserving event memberships and assignments for a later resume.'
+                : targetStatus === 'deactivated'
+                  ? 'Deactivation revokes access and disables memberships and assignments. Reactivation will not restore those prior entitlements.'
+                  : currentAccountStatus(statusUser) === 'suspended'
+                    ? 'Resume restores the preserved account access. The user must authenticate again and receive fresh QR credentials.'
+                    : 'Reactivate the account only. Prior event memberships and assignments remain disabled.'}
+            </p>
+            <label className="mt-5 block text-sm font-medium">
+              Reason
+              <textarea
+                value={statusReason}
+                onChange={(event) => setStatusReason(event.target.value)}
+                minLength={3}
+                maxLength={500}
+                required
+                autoFocus
+                rows={3}
+                className="mt-1.5 w-full rounded-md border border-gray-300 bg-white px-3 py-2 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/25 dark:border-gray-700 dark:bg-gray-800"
+              />
+            </label>
+            {statusError && (
+              <p role="alert" className="mt-3 text-sm text-red-700 dark:text-red-300">
+                {statusError}
+              </p>
+            )}
+            <div className="mt-6 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setStatusUser(null);
+                  setTargetStatus(null);
+                  setStatusReason('');
+                  setStatusError(null);
+                }}
+                disabled={changeAccountStatus.isPending}
+                className="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium hover:bg-gray-50 disabled:opacity-50 dark:border-gray-700 dark:hover:bg-gray-800"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={changeAccountStatus.isPending || statusReason.trim().length < 3}
+                className={`rounded-md px-4 py-2 text-sm font-medium text-white disabled:opacity-50 ${
+                  targetStatus === 'deactivated'
+                    ? 'bg-red-700 hover:bg-red-800'
+                    : targetStatus === 'suspended'
+                      ? 'bg-amber-600 hover:bg-amber-700'
+                      : 'bg-emerald-600 hover:bg-emerald-700'
+                }`}
+              >
+                {changeAccountStatus.isPending ? 'Saving...' : 'Confirm account change'}
+              </button>
+            </div>
+          </form>
         </div>
       )}
 

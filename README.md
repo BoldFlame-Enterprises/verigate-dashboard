@@ -11,7 +11,13 @@ The admin web dashboard for the VeriGate Access Control system.
 - **Event management**: create/select events; every other view is scoped to the selected event.
 - **Administrator-led identity management**: server-driven
   search/pagination, pending-user creation, one-time activation delivery,
-  password reset, deactivate, password-free bulk CSV import, and export.
+  password reset, reasoned suspend/resume/deactivate/reactivate controls,
+  password-free bulk CSV import, and export. Suspension preserves event
+  entitlements; reactivation after deactivation does not restore them.
+- **Global security settings**: global administrators can inspect and change
+  legacy QR v2 compatibility with optimistic version checks, a reason, and an
+  exact typed confirmation. Event administrators cannot see the navigation or
+  authorize the backing API operation.
 - **Access & area configuration**: CRUD for access levels and areas, plus assignment management.
 - **Analytics**: scan-volume-over-time and grant/deny/area/access-level/scanner breakdown charts (Recharts), backed by cached backend aggregate endpoints, with CSV export of the raw scan log.
 - **Polling-based sync monitoring**: active views refetch approximately every 10 seconds to show each device's last-sync time and online/stale/offline status. “Live” means polling, not a socket stream; dashboard/analytics backend data uses five-second cache windows retained for 15 seconds.

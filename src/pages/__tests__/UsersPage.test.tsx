@@ -11,6 +11,7 @@ vi.mock('../../lib/api', () => ({
   api: {
     get: vi.fn(),
     post: vi.fn(),
+    put: vi.fn(),
     delete: vi.fn(),
   },
 }));
@@ -103,6 +104,26 @@ describe('UsersPage pagination', () => {
       params: { page: 2, limit: 50, search: undefined },
     }));
   }, 10_000);
+
+  it('requires a reason and uses the versioned lifecycle endpoint to suspend access', async () => {
+    vi.mocked(api.put).mockResolvedValue({ data: { success: true } } as never);
+    renderPage();
+    fireEvent.click(await screen.findByRole('button', { name: 'Suspend User 1' }));
+    const dialog = screen.getByRole('dialog', { name: 'Suspend User 1' });
+    const submit = within(dialog).getByRole('button', { name: 'Confirm account change' });
+    expect(submit).toBeDisabled();
+
+    fireEvent.change(within(dialog).getByLabelText('Reason'), {
+      target: { value: 'Temporary access investigation' },
+    });
+    fireEvent.click(submit);
+
+    await waitFor(() => expect(api.put).toHaveBeenCalledWith('/users/1/status', {
+      status: 'suspended',
+      expected_status: 'active',
+      reason: 'Temporary access investigation',
+    }));
+  });
 });
 
 describe('event administration membership management', () => {

@@ -13,6 +13,7 @@ import EventsPage from './pages/EventsPage';
 import ActivateAccountPage from './pages/ActivateAccountPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
 import ChangePasswordPage from './pages/ChangePasswordPage';
+import SettingsPage from './pages/SettingsPage';
 import { useAuth } from './context/AuthContext';
 import { useEvent } from './context/EventContext';
 
@@ -51,6 +52,7 @@ export default function App() {
             <Route path="/analytics" element={<AnalyticsPage />} />
             <Route path="/events" element={<EventsPage />} />
             <Route path="/change-password" element={<ChangePasswordPage />} />
+            <Route path="/settings" element={<SettingsPage />} />
           </Route>
 
           <Route

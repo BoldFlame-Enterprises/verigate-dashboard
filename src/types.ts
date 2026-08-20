@@ -1,4 +1,5 @@
 export type UserRole = 'admin' | 'scanner' | 'user';
+export type AccountStatus = 'active' | 'suspended' | 'deactivated';
 
 export interface User {
   id: number;
@@ -7,6 +8,9 @@ export interface User {
   phone: string;
   role: UserRole;
   is_active: boolean;
+  account_status?: AccountStatus;
+  status_reason?: string | null;
+  status_changed_at?: string;
   created_at: string;
   updated_at: string;
 }
