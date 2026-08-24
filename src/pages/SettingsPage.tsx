@@ -1,7 +1,8 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { AlertTriangle, ShieldCheck } from 'lucide-react';
 import { api, APIResponse } from '../lib/api';
-import { getErrorMessage } from '../lib/errors';
+import { ApiSupportReference, getApiSupportReference, getErrorMessage } from '../lib/errors';
+import { SupportReference } from '../components/SupportReference';
 
 interface QrCompatibilitySetting {
   v2_enabled: boolean;
@@ -16,16 +17,23 @@ export default function SettingsPage() {
   const [reason, setReason] = useState('');
   const [confirmation, setConfirmation] = useState('');
   const [error, setError] = useState('');
+  const [supportReference, setSupportReference] = useState<ApiSupportReference>({});
   const [success, setSuccess] = useState('');
   const [saving, setSaving] = useState(false);
 
-  async function load() {
+  async function load(preserveActionError = false) {
     try {
       const response = await api.get<APIResponse<QrCompatibilitySetting>>('/admin/qr-compatibility');
       setSetting(response.data.data || null);
-      setError('');
+      if (!preserveActionError) {
+        setError('');
+        setSupportReference({});
+      }
     } catch (loadError) {
-      setError(getErrorMessage(loadError, 'Unable to load global security settings'));
+      if (!preserveActionError) {
+        setError(getErrorMessage(loadError, 'Unable to load global security settings'));
+        setSupportReference(getApiSupportReference(loadError));
+      }
     }
   }
 
@@ -37,6 +45,7 @@ export default function SettingsPage() {
     const nextEnabled = !setting.v2_enabled;
     setSaving(true);
     setError('');
+    setSupportReference({});
     setSuccess('');
     try {
       const response = await api.put<APIResponse<QrCompatibilitySetting>>('/admin/qr-compatibility', {
@@ -51,7 +60,8 @@ export default function SettingsPage() {
       setSuccess(nextEnabled ? 'Legacy QR v2 compatibility enabled.' : 'Legacy QR v2 compatibility disabled.');
     } catch (saveError) {
       setError(getErrorMessage(saveError, 'Unable to update QR compatibility'));
-      await load();
+      setSupportReference(getApiSupportReference(saveError));
+      await load(true);
     } finally {
       setSaving(false);
     }
@@ -123,6 +133,7 @@ export default function SettingsPage() {
                 />
               </label>
               {error && <p role="alert" className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+              <SupportReference reference={supportReference} />
               {success && <p role="status" className="text-sm text-emerald-700 dark:text-emerald-300">{success}</p>}
               <button
                 type="submit"

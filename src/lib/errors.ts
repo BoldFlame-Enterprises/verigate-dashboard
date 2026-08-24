@@ -29,6 +29,14 @@ export function getApiSupportReference(err: unknown): ApiSupportReference {
   };
 }
 
+export function formatApiSupportReference(reference: ApiSupportReference): string | null {
+  const fields = [
+    reference.requestId ? `request_id=${reference.requestId}` : null,
+    reference.correlationId ? `correlation_id=${reference.correlationId}` : null,
+  ].filter((value): value is string => Boolean(value));
+  return fields.length > 0 ? fields.join(' ') : null;
+}
+
 function getValidationDetails(data: unknown): string | null {
   if (!Array.isArray(data)) return null;
 
