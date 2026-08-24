@@ -32,9 +32,9 @@ describe('ActivateAccountPage', () => {
     const user = userEvent.setup();
 
     render(<ActivateAccountPage />);
-    await user.type(screen.getByPlaceholderText('Activation token'), 'used-token');
+    await user.type(screen.getByLabelText('Activation token'), 'used-token');
     await user.type(
-      screen.getByPlaceholderText('New password (15+ characters)'),
+      screen.getByLabelText('New password'),
       'Unique test passphrase 42!',
     );
     await user.click(screen.getByRole('button', { name: 'Activate' }));
@@ -55,9 +55,9 @@ describe('ActivateAccountPage', () => {
     const user = userEvent.setup();
 
     render(<ActivateAccountPage />);
-    await user.type(screen.getByPlaceholderText('Activation token'), 'fresh-token');
+    await user.type(screen.getByLabelText('Activation token'), 'fresh-token');
     await user.type(
-      screen.getByPlaceholderText('New password (15+ characters)'),
+      screen.getByLabelText('New password'),
       'Unique test passphrase 42!',
     );
     await user.click(screen.getByRole('button', { name: 'Activate' }));

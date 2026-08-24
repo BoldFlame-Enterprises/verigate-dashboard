@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   AlertTriangle,
@@ -20,6 +20,7 @@ import LoadingSpinner from '../components/LoadingSpinner';
 import ErrorState from '../components/ErrorState';
 import EmptyState from '../components/EmptyState';
 import Tooltip from '../components/Tooltip';
+import { useDisclosureFocus } from '../components/useDisclosureFocus';
 
 type DeviceAction = 'deregister' | 'blacklist' | 'unblacklist';
 
@@ -88,10 +89,18 @@ export default function SyncMonitorPage() {
   const [reason, setReason] = useState('');
   const [historyRegistration, setHistoryRegistration] = useState<DeviceRegistration | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
+  const [feedbackKind, setFeedbackKind] = useState<'status' | 'alert'>('status');
+  const actionTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const actionReasonRef = useRef<HTMLTextAreaElement | null>(null);
+  const historyTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const historyCloseRef = useRef<HTMLButtonElement | null>(null);
   const [registrationCursors, setRegistrationCursors] = useState<string[]>([]);
   const [historyCursors, setHistoryCursors] = useState<string[]>([]);
   const registrationCursor = registrationCursors[registrationCursors.length - 1];
   const historyCursor = historyCursors[historyCursors.length - 1];
+
+  useDisclosureFocus(!!pendingAction, actionReasonRef, actionTriggerRef);
+  useDisclosureFocus(!!historyRegistration, historyCloseRef, historyTriggerRef);
 
   const {
     data: registrationPage,
@@ -143,9 +152,11 @@ export default function SyncMonitorPage() {
       setPendingAction(null);
       setReason('');
       setFeedback('Device state updated and its existing session authority was revoked.');
+      setFeedbackKind('status');
       await queryClient.invalidateQueries({ queryKey: ['device-registrations', eventId] });
     },
     onError: async (error) => {
+      setFeedbackKind('alert');
       setFeedback(
         conflictMessage(error) ??
         'The device action could not be completed. Check the reason and current registration state, then try again.'
@@ -159,7 +170,8 @@ export default function SyncMonitorPage() {
   if (isError) return <ErrorState />;
   const registrations = registrationPage?.items ?? [];
 
-  const openAction = (registration: DeviceRegistration, action: DeviceAction) => {
+  const openAction = (registration: DeviceRegistration, action: DeviceAction, trigger: HTMLButtonElement) => {
+    actionTriggerRef.current = trigger;
     setPendingAction({ registration, action });
     setReason('');
     setFeedback(null);
@@ -181,7 +193,8 @@ export default function SyncMonitorPage() {
 
       {feedback && (
         <div
-          role="alert"
+          role={feedbackKind}
+          aria-live={feedbackKind === 'alert' ? 'assertive' : 'polite'}
           className="flex items-start justify-between gap-3 rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:bg-amber-950/40 dark:text-amber-200"
         >
           <span>{feedback}</span>
@@ -268,7 +281,8 @@ export default function SyncMonitorPage() {
                           <button
                             type="button"
                             aria-label="View device history"
-                            onClick={() => {
+                            onClick={(event) => {
+                              historyTriggerRef.current = event.currentTarget;
                               setHistoryCursors([]);
                               setHistoryRegistration(registration);
                             }}
@@ -282,7 +296,7 @@ export default function SyncMonitorPage() {
                             <button
                               type="button"
                               aria-label="Deregister device"
-                              onClick={() => openAction(registration, 'deregister')}
+                              onClick={(event) => openAction(registration, 'deregister', event.currentTarget)}
                               className="rounded-md border border-amber-300 p-2 text-amber-700 transition-colors hover:bg-amber-50 focus:outline-none focus:ring-2 focus:ring-amber-600 dark:border-amber-800 dark:text-amber-300 dark:hover:bg-amber-950"
                             >
                               <LogOut className="h-4 w-4" />
@@ -294,7 +308,7 @@ export default function SyncMonitorPage() {
                             <button
                               type="button"
                               aria-label="Blacklist device"
-                              onClick={() => openAction(registration, 'blacklist')}
+                              onClick={(event) => openAction(registration, 'blacklist', event.currentTarget)}
                               className="rounded-md border border-red-300 p-2 text-red-700 transition-colors hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-600 dark:border-red-800 dark:text-red-300 dark:hover:bg-red-950"
                             >
                               <Ban className="h-4 w-4" />
@@ -305,7 +319,7 @@ export default function SyncMonitorPage() {
                             <button
                               type="button"
                               aria-label="Remove device from blacklist"
-                              onClick={() => openAction(registration, 'unblacklist')}
+                              onClick={(event) => openAction(registration, 'unblacklist', event.currentTarget)}
                               className="rounded-md border border-amber-300 p-2 text-amber-700 transition-colors hover:bg-amber-50 focus:outline-none focus:ring-2 focus:ring-amber-600 dark:border-amber-800 dark:text-amber-300 dark:hover:bg-amber-950"
                             >
                               <RotateCcw className="h-4 w-4" />
@@ -346,6 +360,8 @@ export default function SyncMonitorPage() {
         return (
           <section
             aria-labelledby="device-action-title"
+            aria-describedby="device-action-description"
+            role="region"
             className={`rounded-xl p-5 ${isDanger
               ? 'bg-red-50 text-red-950 dark:bg-red-950/40 dark:text-red-100'
               : 'bg-amber-50 text-amber-950 dark:bg-amber-950/40 dark:text-amber-100'
@@ -355,10 +371,12 @@ export default function SyncMonitorPage() {
               <AlertTriangle className="mt-0.5 h-5 w-5 flex-none" />
               <div className="min-w-0 flex-1">
                 <h2 id="device-action-title" className="font-semibold">{copy.title}</h2>
-                <p className="mt-1 max-w-2xl text-sm">{copy.warning}</p>
-                <label className="mt-4 block max-w-xl text-sm font-medium">
+                <p id="device-action-description" className="mt-1 max-w-2xl text-sm">{copy.warning}</p>
+                <label htmlFor="device-action-reason" className="mt-4 block max-w-xl text-sm font-medium">
                   {copy.field}
                   <textarea
+                    ref={actionReasonRef}
+                    id="device-action-reason"
                     value={reason}
                     onChange={(event) => setReason(event.target.value)}
                     rows={3}
@@ -400,6 +418,7 @@ export default function SyncMonitorPage() {
       {historyRegistration && (
         <section
           aria-labelledby="device-history-title"
+          role="region"
           className="rounded-xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-gray-900"
         >
           <div className="flex items-start justify-between gap-3">
@@ -411,6 +430,7 @@ export default function SyncMonitorPage() {
             </div>
             <Tooltip content="Close history">
               <button
+                ref={historyCloseRef}
                 type="button"
                 aria-label="Close device history"
                 onClick={() => {

@@ -32,16 +32,19 @@ export default function LoginPage() {
     <div className="flex h-screen items-center justify-center bg-gray-50 dark:bg-gray-950">
       <div className="w-full max-w-sm rounded-xl border border-gray-200 bg-white p-8 shadow-sm dark:border-gray-800 dark:bg-gray-900">
         <div className="mb-6 flex flex-col items-center gap-2">
-          <ShieldCheck className="h-8 w-8 text-brand-600" />
+          <ShieldCheck aria-hidden="true" className="h-8 w-8 text-brand-600" />
           <h1 className="text-xl font-semibold">VeriGate Dashboard</h1>
           <p className="text-sm text-gray-500 dark:text-gray-400">Sign in with your admin account</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">Email</label>
+            <label htmlFor="login-email" className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">Email</label>
             <input
+              id="login-email"
+              name="email"
               type="email"
+              autoComplete="username"
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
@@ -49,9 +52,12 @@ export default function LoginPage() {
             />
           </div>
           <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">Password</label>
+            <label htmlFor="login-password" className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">Password</label>
             <input
+              id="login-password"
+              name="password"
               type="password"
+              autoComplete="current-password"
               required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
@@ -59,7 +65,7 @@ export default function LoginPage() {
             />
           </div>
 
-          {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+          {error && <p role="alert" className="text-sm text-red-700 dark:text-red-300">{error}</p>}
 
           <button
             type="submit"

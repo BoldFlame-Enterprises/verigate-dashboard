@@ -131,12 +131,15 @@ describe('event-scoped device controls', () => {
     renderPage();
     await screen.findByText('Gate Operator');
 
-    await user.click(screen.getByRole('button', { name: 'Deregister device' }));
+    const trigger = screen.getByRole('button', { name: 'Deregister device' });
+    await user.click(trigger);
     expect(screen.getByText(/signs the app out/i)).toBeInTheDocument();
     const confirm = screen.getByRole('button', { name: 'Confirm deregistration' });
     expect(confirm).toBeDisabled();
 
-    await user.type(screen.getByLabelText('Reason for deregistration'), 'Device reassigned');
+    const reason = screen.getByLabelText('Reason for deregistration');
+    await waitFor(() => expect(reason).toHaveFocus());
+    await user.type(reason, 'Device reassigned');
     await user.click(confirm);
 
     await waitFor(() => expect(api.post).toHaveBeenCalledWith(
@@ -147,6 +150,18 @@ describe('event-scoped device controls', () => {
         expected_generation: 3,
       }
     ));
+  });
+
+  it('restores focus to the device action that opened a dismissed panel', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByText('Gate Operator');
+    const trigger = screen.getByRole('button', { name: 'Blacklist device' });
+
+    await user.click(trigger);
+    await waitFor(() => expect(screen.getByLabelText('Reason for blacklisting')).toHaveFocus());
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    await waitFor(() => expect(trigger).toHaveFocus());
   });
 
   it('shows the no-final-upload warning before blacklisting', async () => {
@@ -183,13 +198,17 @@ describe('event-scoped device controls', () => {
     renderPage();
     await screen.findByText('Gate Operator');
 
-    await user.click(screen.getByRole('button', { name: 'View device history' }));
+    const trigger = screen.getByRole('button', { name: 'View device history' });
+    await user.click(trigger);
 
     expect(await screen.findByText(/Device session registered/)).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Close device history' })).toHaveFocus());
     expect(api.get).toHaveBeenCalledWith(
       '/devices/events/7/registrations/12/actions',
       expect.objectContaining({ params: { limit: 50, cursor: undefined } }),
     );
+    await user.click(screen.getByRole('button', { name: 'Close device history' }));
+    await waitFor(() => expect(trigger).toHaveFocus());
   });
 
   it('reports a concurrent change and refreshes authoritative state', async () => {

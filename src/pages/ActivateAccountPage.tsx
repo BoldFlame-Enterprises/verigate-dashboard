@@ -33,8 +33,11 @@ export default function ActivateAccountPage() {
     <main className="mx-auto mt-16 max-w-md rounded-xl border p-6">
       <h1 className="text-xl font-semibold">Activate account</h1>
       <form onSubmit={submit} className="mt-4 space-y-3">
-        <input name="token" required placeholder="Activation token" className="w-full rounded-md border p-2" />
-        <input name="password" required type="password" minLength={15} maxLength={128} placeholder="New password (15+ characters)" className="w-full rounded-md border p-2" />
+        <label htmlFor="activation-token" className="block text-sm font-medium">Activation token</label>
+        <input id="activation-token" name="token" autoComplete="one-time-code" required className="w-full rounded-md border p-2" />
+        <label htmlFor="activation-password" className="block text-sm font-medium">New password</label>
+        <p id="activation-password-help" className="text-sm text-gray-600">Use 15–128 characters.</p>
+        <input id="activation-password" aria-describedby="activation-password-help" name="password" autoComplete="new-password" required type="password" minLength={15} maxLength={128} className="w-full rounded-md border p-2" />
         <button
           type="submit"
           disabled={isSubmitting}

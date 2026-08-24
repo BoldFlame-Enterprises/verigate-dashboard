@@ -437,8 +437,8 @@ export default function UsersPage() {
         </div>
       </div>
 
-      <label className="block max-w-md text-sm">
-        <span className="sr-only">Search users</span>
+      <label className="grid max-w-md gap-1 text-sm font-medium">
+        <span>Search users</span>
         <input
           aria-label="Search users"
           value={search}
@@ -452,7 +452,7 @@ export default function UsersPage() {
       </label>
 
       {importResult && (
-        <div className="flex items-center justify-between rounded-md bg-brand-50 px-3 py-2 text-sm text-brand-700 dark:bg-brand-950/40 dark:text-brand-300">
+        <div role="status" aria-live="polite" className="flex items-center justify-between rounded-md bg-brand-50 px-3 py-2 text-sm text-brand-700 dark:bg-brand-950/40 dark:text-brand-300">
           {importResult}
           <Tooltip content="Dismiss import summary">
             <button
@@ -495,16 +495,24 @@ export default function UsersPage() {
               setFormError(null);
               createUser.mutate(form);
             }}
-            className="grid grid-cols-2 gap-3"
+            className="grid gap-3 sm:grid-cols-2"
           >
-            <input required placeholder="Name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-800" />
-            <input required type="email" placeholder="Email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} className="rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-800" />
-            <input required placeholder="Phone" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} className="rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-800" />
-            <select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value as UserRole })} className="rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-800">
+            <label htmlFor="new-user-name" className="grid gap-1 text-sm font-medium">Name
+              <input id="new-user-name" autoComplete="name" required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-800" />
+            </label>
+            <label htmlFor="new-user-email" className="grid gap-1 text-sm font-medium">Email
+              <input id="new-user-email" autoComplete="email" required type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} className="rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-800" />
+            </label>
+            <label htmlFor="new-user-phone" className="grid gap-1 text-sm font-medium">Phone
+              <input id="new-user-phone" autoComplete="tel" required value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} className="rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-800" />
+            </label>
+            <label htmlFor="new-user-role" className="grid gap-1 text-sm font-medium">Account role
+            <select id="new-user-role" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value as UserRole })} className="rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-800">
               <option value="user">User</option>
               <option value="scanner">Scanner</option>
               <option value="admin">Global administrator</option>
             </select>
+            </label>
             {form.role === 'admin' && (
               <p className="col-span-2 text-sm text-brand-700 dark:text-brand-200">
                 Global administrators can manage every event. For event-limited access, create a
@@ -514,7 +522,7 @@ export default function UsersPage() {
             <button type="submit" disabled={createUser.isPending} className="rounded-md bg-brand-600 px-3 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-60">
               {createUser.isPending ? 'Creating...' : 'Create user'}
             </button>
-            {formError && <p className="col-span-2 text-sm text-red-600 dark:text-red-400">{formError}</p>}
+            {formError && <p role="alert" className="text-sm text-red-700 sm:col-span-2 dark:text-red-300">{formError}</p>}
           </form>
         </div>
       )}

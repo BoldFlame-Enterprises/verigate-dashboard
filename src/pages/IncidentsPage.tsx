@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { MouseEvent, useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   AlertTriangle,
@@ -22,6 +22,7 @@ import {
 import LoadingSpinner from '../components/LoadingSpinner';
 import ErrorState from '../components/ErrorState';
 import EmptyState from '../components/EmptyState';
+import { useDisclosureFocus } from '../components/useDisclosureFocus';
 
 type CaseKind = 'incident' | 'override';
 type CaseAction = 'assign' | 'begin-review' | 'resolve' | 'dismiss' | 'complete-review' | 'reopen';
@@ -63,7 +64,7 @@ function titleCase(value: string): string {
 
 function actionButton(
   label: string,
-  onClick: () => void,
+  onClick: (event: MouseEvent<HTMLButtonElement>) => void,
   emphasis: 'primary' | 'danger' | 'neutral' = 'neutral'
 ) {
   const tones = {
@@ -165,6 +166,12 @@ export default function IncidentsPage() {
   const [assigneeId, setAssigneeId] = useState('');
   const [outcome, setOutcome] = useState<Outcome>('justified');
   const [formError, setFormError] = useState('');
+  const actionTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const actionPanelRef = useRef<HTMLElement | null>(null);
+  const assigneeRef = useRef<HTMLSelectElement | null>(null);
+  const noteRef = useRef<HTMLTextAreaElement | null>(null);
+
+  useDisclosureFocus(!!draft, actionPanelRef, actionTriggerRef);
   const [conflictNotice, setConflictNotice] = useState('');
   const [activity, setActivity] = useState<{ kind: CaseKind; id: number } | null>(null);
   const [incidentHistory, setIncidentHistory] = useState<Incident[]>([]);
@@ -299,8 +306,10 @@ export default function IncidentsPage() {
     id: number,
     action: CaseAction,
     expectedVersion: number,
-    currentAssignee?: number | null
+    currentAssignee: number | null | undefined,
+    trigger: HTMLButtonElement,
   ) => {
+    actionTriggerRef.current = trigger;
     setDraft({ kind, id, action, expectedVersion, title: actionLabels[action] });
     setNote('');
     setAssigneeId(currentAssignee ? String(currentAssignee) : '');
@@ -313,10 +322,12 @@ export default function IncidentsPage() {
     const cleanNote = note.trim();
     if (noteRequired.has(draft.action) && !cleanNote) {
       setFormError('A note is required for this action.');
+      noteRef.current?.focus();
       return;
     }
     if (draft.action === 'assign' && !assigneeId) {
       setFormError('Choose an event administrator.');
+      assigneeRef.current?.focus();
       return;
     }
     actionMutation.mutate({
@@ -401,11 +412,11 @@ export default function IncidentsPage() {
                     {incident.decision_note && <p className="text-sm italic text-gray-500">“{incident.decision_note}”</p>}
                   </div>
                   <div data-testid={`incident-actions-${incident.id}`} className="flex max-w-md flex-wrap gap-2 lg:justify-end">
-                    {actionButton(incident.assigned_to ? 'Reassign' : 'Assign', () => openAction('incident', incident.id, 'assign', Number(incident.version), incident.assigned_to))}
-                    {incident.status === 'open' && actionButton('Begin review', () => openAction('incident', incident.id, 'begin-review', Number(incident.version)), 'primary')}
-                    {incident.status === 'reviewing' && actionButton('Resolve', () => openAction('incident', incident.id, 'resolve', Number(incident.version)), 'primary')}
-                    {incident.status === 'reviewing' && actionButton('Dismiss', () => openAction('incident', incident.id, 'dismiss', Number(incident.version)), 'danger')}
-                    {(incident.status === 'resolved' || incident.status === 'dismissed') && actionButton('Reopen', () => openAction('incident', incident.id, 'reopen', Number(incident.version)))}
+                    {actionButton(incident.assigned_to ? 'Reassign' : 'Assign', (event) => openAction('incident', incident.id, 'assign', Number(incident.version), incident.assigned_to, event.currentTarget))}
+                    {incident.status === 'open' && actionButton('Begin review', (event) => openAction('incident', incident.id, 'begin-review', Number(incident.version), null, event.currentTarget), 'primary')}
+                    {incident.status === 'reviewing' && actionButton('Resolve', (event) => openAction('incident', incident.id, 'resolve', Number(incident.version), null, event.currentTarget), 'primary')}
+                    {incident.status === 'reviewing' && actionButton('Dismiss', (event) => openAction('incident', incident.id, 'dismiss', Number(incident.version), null, event.currentTarget), 'danger')}
+                    {(incident.status === 'resolved' || incident.status === 'dismissed') && actionButton('Reopen', (event) => openAction('incident', incident.id, 'reopen', Number(incident.version), null, event.currentTarget))}
                     {actionButton('View activity', () => setActivity({ kind: 'incident', id: incident.id }))}
                   </div>
                 </div>
@@ -473,10 +484,10 @@ export default function IncidentsPage() {
                     {overrideCase.decision_note && <p className="text-sm italic text-gray-500">“{overrideCase.decision_note}”</p>}
                   </div>
                   <div data-testid={`override-actions-${overrideCase.id}`} className="flex max-w-md flex-wrap gap-2 lg:justify-end">
-                    {actionButton(overrideCase.assigned_to ? 'Reassign' : 'Assign', () => openAction('override', overrideCase.id, 'assign', Number(overrideCase.version), overrideCase.assigned_to))}
-                    {overrideCase.review_status === 'pending' && actionButton('Begin review', () => openAction('override', overrideCase.id, 'begin-review', Number(overrideCase.version)), 'primary')}
-                    {overrideCase.review_status === 'reviewing' && actionButton('Complete review', () => openAction('override', overrideCase.id, 'complete-review', Number(overrideCase.version)), 'primary')}
-                    {overrideCase.review_status === 'reviewed' && actionButton('Reopen', () => openAction('override', overrideCase.id, 'reopen', Number(overrideCase.version)))}
+                    {actionButton(overrideCase.assigned_to ? 'Reassign' : 'Assign', (event) => openAction('override', overrideCase.id, 'assign', Number(overrideCase.version), overrideCase.assigned_to, event.currentTarget))}
+                    {overrideCase.review_status === 'pending' && actionButton('Begin review', (event) => openAction('override', overrideCase.id, 'begin-review', Number(overrideCase.version), null, event.currentTarget), 'primary')}
+                    {overrideCase.review_status === 'reviewing' && actionButton('Complete review', (event) => openAction('override', overrideCase.id, 'complete-review', Number(overrideCase.version), null, event.currentTarget), 'primary')}
+                    {overrideCase.review_status === 'reviewed' && actionButton('Reopen', (event) => openAction('override', overrideCase.id, 'reopen', Number(overrideCase.version), null, event.currentTarget))}
                     {actionButton('View activity', () => setActivity({ kind: 'override', id: overrideCase.id }))}
                   </div>
                 </div>
@@ -497,11 +508,17 @@ export default function IncidentsPage() {
       </section>
 
       {draft && (
-        <section className="rounded-2xl border border-emerald-200 bg-emerald-50/60 p-5 dark:border-emerald-900/60 dark:bg-emerald-950/20">
+        <section
+          ref={actionPanelRef}
+          tabIndex={-1}
+          role="region"
+          aria-labelledby="case-action-title"
+          className="rounded-2xl border border-emerald-200 bg-emerald-50/60 p-5 focus:outline-none focus:ring-2 focus:ring-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/20"
+        >
           <div className="flex items-start justify-between gap-4">
             <div>
               <p className="text-xs font-semibold uppercase tracking-wider text-emerald-700 dark:text-emerald-300">Case action</p>
-              <h2 className="text-lg font-semibold">{draft.title}</h2>
+              <h2 id="case-action-title" className="text-lg font-semibold">{draft.title}</h2>
               <p className="text-sm text-gray-600 dark:text-gray-300">Case #{draft.id} · expected version {draft.expectedVersion}</p>
             </div>
             <button type="button" onClick={() => setDraft(null)} className="text-sm text-gray-500">Cancel</button>
@@ -511,6 +528,7 @@ export default function IncidentsPage() {
               <label className="text-sm font-medium">
                 Event administrator
                 <select
+                  ref={assigneeRef}
                   aria-label="Event administrator"
                   aria-describedby="administrator-scope-help"
                   value={assigneeId}
@@ -554,6 +572,7 @@ export default function IncidentsPage() {
               <label className="text-sm font-medium md:col-span-2">
                 Decision note
                 <textarea
+                  ref={noteRef}
                   aria-label="Decision note"
                   value={note}
                   onChange={(event) => setNote(event.target.value)}

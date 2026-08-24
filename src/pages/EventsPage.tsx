@@ -65,14 +65,18 @@ export default function EventsPage() {
           </div>
           <form
             onSubmit={(e) => { e.preventDefault(); setError(null); createEvent.mutate(); }}
-            className="grid grid-cols-2 gap-3"
+            className="grid gap-3 sm:grid-cols-2"
           >
-            <input required placeholder="Event name" value={name} onChange={(e) => setName(e.target.value)} className="rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-800" />
-            <input placeholder="Description" value={description} onChange={(e) => setDescription(e.target.value)} className="rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-800" />
+            <label htmlFor="event-name" className="grid gap-1 text-sm font-medium">Event name
+              <input id="event-name" required value={name} onChange={(e) => setName(e.target.value)} className="rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-800" />
+            </label>
+            <label htmlFor="event-description" className="grid gap-1 text-sm font-medium">Description
+              <input id="event-description" value={description} onChange={(e) => setDescription(e.target.value)} className="rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-800" />
+            </label>
             <button type="submit" disabled={createEvent.isPending} className="rounded-md bg-brand-600 px-3 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-60">
               {createEvent.isPending ? 'Creating...' : 'Create event'}
             </button>
-            {error && <p className="col-span-2 text-sm text-red-600 dark:text-red-400">{error}</p>}
+            {error && <p role="alert" className="text-sm text-red-700 sm:col-span-2 dark:text-red-300">{error}</p>}
           </form>
         </div>
       )}

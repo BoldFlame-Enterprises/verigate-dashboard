@@ -90,10 +90,16 @@ export default function AnalyticsPage() {
 
   const accessLevelPie = breakdown.by_access_level.map((l) => ({ name: l.name, value: l.assigned_users }));
   const maxHourlyScans = Math.max(1, ...hourlyData.map((row) => row.Granted + row.Denied));
+  const hourlyGranted = hourlyData.reduce((sum, row) => sum + row.Granted, 0);
+  const hourlyDenied = hourlyData.reduce((sum, row) => sum + row.Denied, 0);
+  const largestAccessLevel = accessLevelPie.reduce<(typeof accessLevelPie)[number] | null>(
+    (largest, row) => !largest || row.value > largest.value ? row : largest,
+    null,
+  );
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold">Analytics</h1>
         <button onClick={handleExport} className="flex items-center gap-1.5 rounded-md border border-gray-300 px-3 py-1.5 text-sm hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-800">
           <Download className="h-4 w-4" /> Export scans CSV
@@ -101,7 +107,7 @@ export default function AnalyticsPage() {
       </div>
       {exportError && <p role="alert" className="text-sm text-red-600 dark:text-red-400">{exportError}</p>}
 
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-4">
         <div className="rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900">
           <p className="text-sm text-gray-500 dark:text-gray-400">Total scans</p>
           <p className="text-2xl font-semibold">{breakdown.overall.total}</p>
@@ -128,8 +134,13 @@ export default function AnalyticsPage() {
         {hourlyData.length === 0 ? (
           <EmptyState title="No scans in the last 48 hours" />
         ) : (
-          <ResponsiveContainer width="100%" height={280}>
-            <BarChart data={hourlyData} margin={{ top: 8, right: 8, left: -12, bottom: 0 }} barCategoryGap="35%">
+          <>
+            <p id="scan-volume-summary" className="mb-3 text-sm text-gray-600 dark:text-gray-300">
+              The last 48 hours contain {hourlyGranted + hourlyDenied} scans: {hourlyGranted} granted and {hourlyDenied} denied.
+            </p>
+            <div aria-hidden="true">
+              <ResponsiveContainer width="100%" height={280}>
+                <BarChart data={hourlyData} margin={{ top: 8, right: 8, left: -12, bottom: 0 }} barCategoryGap="35%">
               <defs>
                 <linearGradient id="grantedGradient" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stopColor="#34d399" />
@@ -163,8 +174,28 @@ export default function AnalyticsPage() {
               <Legend iconType="circle" iconSize={8} wrapperStyle={{ paddingTop: 12 }} />
               <Bar dataKey="Granted" stackId="a" fill="url(#grantedGradient)" maxBarSize={56} radius={[5, 5, 0, 0]} />
               <Bar dataKey="Denied" stackId="a" fill="url(#deniedGradient)" maxBarSize={56} radius={[5, 5, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+            <details className="mt-3 rounded-lg border border-gray-200 p-3 dark:border-gray-700">
+              <summary className="cursor-pointer font-medium focus:outline-none focus:ring-2 focus:ring-brand-600">View scan volume data table</summary>
+              <div className="mt-3 overflow-x-auto">
+                <table className="w-full min-w-[32rem] text-left text-sm">
+                  <caption className="sr-only">Hourly granted and denied scans for the last 48 hours</caption>
+                  <thead><tr><th scope="col" className="py-2 pr-4">Time</th><th scope="col" className="py-2 pr-4">Granted</th><th scope="col" className="py-2">Denied</th></tr></thead>
+                  <tbody>
+                    {hourlyData.map((row) => (
+                      <tr key={row.time} className="border-t border-gray-200 dark:border-gray-700">
+                        <th scope="row" className="py-2 pr-4 font-medium">{row.time}</th>
+                        <td className="py-2 pr-4">{row.Granted}</td>
+                        <td className="py-2">{row.Denied}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </details>
+          </>
         )}
       </div>
 
@@ -174,17 +205,38 @@ export default function AnalyticsPage() {
           {accessLevelPie.length === 0 ? (
             <EmptyState title="No assignments yet" />
           ) : (
-            <ResponsiveContainer width="100%" height={240}>
-              <PieChart>
-                <Pie data={accessLevelPie} dataKey="value" nameKey="name" outerRadius={80} label>
-                  {accessLevelPie.map((_, idx) => (
-                    <Cell key={idx} fill={COLORS[idx % COLORS.length]} />
+            <>
+              <p className="text-sm text-gray-600 dark:text-gray-300">
+                {largestAccessLevel
+                  ? `${largestAccessLevel.name} has the most assignments (${largestAccessLevel.value}).`
+                  : 'No access-level assignments are available.'}
+              </p>
+              <div aria-hidden="true">
+                <ResponsiveContainer width="100%" height={240}>
+                  <PieChart>
+                    <Pie data={accessLevelPie} dataKey="value" nameKey="name" outerRadius={80} label>
+                      {accessLevelPie.map((_, idx) => (
+                        <Cell key={idx} fill={COLORS[idx % COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip contentStyle={TOOLTIP_STYLE} labelStyle={{ color: '#f8fafc', fontWeight: 600 }} />
+                    <Legend />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+              <table className="mt-3 w-full text-left text-sm">
+                <caption className="sr-only">Assignments by access level</caption>
+                <thead><tr><th scope="col" className="py-2">Access level</th><th scope="col" className="py-2 text-right">Assigned users</th></tr></thead>
+                <tbody>
+                  {accessLevelPie.map((row) => (
+                    <tr key={row.name} className="border-t border-gray-200 dark:border-gray-700">
+                      <th scope="row" className="py-2 font-medium">{row.name}</th>
+                      <td className="py-2 text-right">{row.value}</td>
+                    </tr>
                   ))}
-                </Pie>
-                <Tooltip contentStyle={TOOLTIP_STYLE} labelStyle={{ color: '#f8fafc', fontWeight: 600 }} />
-                <Legend />
-              </PieChart>
-            </ResponsiveContainer>
+                </tbody>
+              </table>
+            </>
           )}
         </div>
 
@@ -193,7 +245,8 @@ export default function AnalyticsPage() {
           {breakdown.by_scanner.length === 0 ? (
             <EmptyState title="No scanner activity yet" />
           ) : (
-            <table className="w-full text-sm">
+            <div className="overflow-x-auto">
+            <table className="w-full min-w-[32rem] text-sm">
               <thead className="text-left text-gray-500 dark:text-gray-400">
                 <tr>
                   <th className="pb-2">Scanner</th>
@@ -213,6 +266,7 @@ export default function AnalyticsPage() {
                 ))}
               </tbody>
             </table>
+            </div>
           )}
         </div>
       </div>

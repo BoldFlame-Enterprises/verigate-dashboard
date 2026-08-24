@@ -175,6 +175,18 @@ describe('IncidentsPage reviewed operational interactions', () => {
     expect(mutateMock).not.toHaveBeenCalled();
   });
 
+  it('moves focus into case actions and restores it when the panel closes', async () => {
+    installQueries([incident({ status: 'reviewing', version: 2 })], []);
+    render(<IncidentsPage />);
+    const trigger = screen.getByRole('button', { name: 'Resolve' });
+
+    fireEvent.click(trigger);
+    const panel = screen.getByRole('region', { name: 'Resolve incident' });
+    await waitFor(() => expect(panel).toHaveFocus());
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    await waitFor(() => expect(trigger).toHaveFocus());
+  });
+
   it('displays assignment separately from the actual decision-maker and outcome', () => {
     installQueries(
       [incident({

@@ -160,9 +160,13 @@ export default function AccessPage() {
                 </button>
               </Tooltip>
             </div>
-            <form onSubmit={(e) => { e.preventDefault(); createLevel.mutate(); }} className="grid grid-cols-3 gap-3">
-              <input required placeholder="Name (e.g. VIP)" value={levelName} onChange={(e) => setLevelName(e.target.value)} className="rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-800" />
-              <input required type="number" placeholder="Priority" value={levelPriority} onChange={(e) => setLevelPriority(Number(e.target.value))} className="rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-800" />
+            <form onSubmit={(e) => { e.preventDefault(); createLevel.mutate(); }} className="grid gap-3 sm:grid-cols-3">
+              <label htmlFor="access-level-name" className="grid gap-1 text-sm font-medium">Name
+                <input id="access-level-name" required placeholder="For example, VIP" value={levelName} onChange={(e) => setLevelName(e.target.value)} className="rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-800" />
+              </label>
+              <label htmlFor="access-level-priority" className="grid gap-1 text-sm font-medium">Priority
+                <input id="access-level-priority" required type="number" value={levelPriority} onChange={(e) => setLevelPriority(Number(e.target.value))} className="rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-800" />
+              </label>
               <button type="submit" className="rounded-md bg-brand-600 px-3 py-2 text-sm font-medium text-white hover:bg-brand-700">Create</button>
             </form>
           </div>
@@ -210,8 +214,9 @@ export default function AccessPage() {
               onSubmit={(e) => { e.preventDefault(); setAssignError(null); createAssignment.mutate(); }}
               className="space-y-3"
             >
+              <label htmlFor="assignment-user-search" className="grid gap-1 text-sm font-medium">Search users
               <input
-                aria-label="Search assignment users"
+                id="assignment-user-search"
                 value={userSearch}
                 onChange={(event) => {
                   setUserSearch(event.target.value);
@@ -221,19 +226,26 @@ export default function AccessPage() {
                 placeholder="Search users by name or email"
                 className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-800"
               />
-              <div className="grid grid-cols-4 gap-3">
-                <select aria-label="User" required value={assignUserId} onChange={(e) => setAssignUserId(e.target.value)} className="rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-800">
+              </label>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                <label htmlFor="assignment-user" className="grid gap-1 text-sm font-medium">User
+                <select id="assignment-user" required value={assignUserId} onChange={(e) => setAssignUserId(e.target.value)} className="rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-800">
                   <option value="">User</option>
                   {users.map((u) => <option key={u.id} value={u.id}>{u.name} · {u.email}</option>)}
                 </select>
-                <select aria-label="Access level" required value={assignLevelId} onChange={(e) => setAssignLevelId(e.target.value)} className="rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-800">
+                </label>
+                <label htmlFor="assignment-level" className="grid gap-1 text-sm font-medium">Access level
+                <select id="assignment-level" required value={assignLevelId} onChange={(e) => setAssignLevelId(e.target.value)} className="rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-800">
                   <option value="">Access level</option>
                   {levels?.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
                 </select>
-                <select aria-label="Area" required value={assignAreaId} onChange={(e) => setAssignAreaId(e.target.value)} className="rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-800">
+                </label>
+                <label htmlFor="assignment-area" className="grid gap-1 text-sm font-medium">Area
+                <select id="assignment-area" required value={assignAreaId} onChange={(e) => setAssignAreaId(e.target.value)} className="rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-800">
                   <option value="">Area</option>
                   {areas?.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
                 </select>
+                </label>
                 <button type="submit" disabled={createAssignment.isPending} className="rounded-md bg-brand-600 px-3 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-60">
                   {createAssignment.isPending ? 'Assigning...' : 'Assign'}
                 </button>
@@ -302,9 +314,9 @@ export default function AccessPage() {
                           type="button"
                           aria-label={`Revoke ${a.user_name}'s assignment`}
                           onClick={() => revokeAssignment.mutate(a.id)}
-                          className="rounded-md p-2 text-gray-500 transition-colors hover:bg-red-50 hover:text-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 dark:hover:bg-red-950/40 dark:hover:text-red-300"
+                          className="rounded-md p-2 text-red-700 transition-colors hover:bg-red-50 hover:text-red-800 focus:outline-none focus:ring-2 focus:ring-red-500 dark:text-red-300 dark:hover:bg-red-950/40"
                         >
-                          <Trash2 className="h-4 w-4" />
+                          <Trash2 aria-hidden="true" className="h-4 w-4" />
                         </button>
                       </Tooltip>
                     </td>

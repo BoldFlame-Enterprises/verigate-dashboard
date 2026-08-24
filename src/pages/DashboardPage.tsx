@@ -36,14 +36,14 @@ export default function DashboardPage() {
         <p className="text-sm text-gray-500 dark:text-gray-400">Live overview, refreshes every 10s</p>
       </div>
 
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-4">
         <StatCard label="Event members" value={data.members} icon={Users} />
         <StatCard label="Areas" value={data.areas} icon={MapPin} />
         <StatCard label="Access levels" value={data.access_levels} icon={ShieldCheck} />
         <StatCard label="Scans (24h)" value={data.scans.last_24h} icon={ScanLine} />
       </div>
 
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3">
         <StatCard label="Total scans" value={data.scans.total} icon={ScanLine} />
         <StatCard label="Granted" value={data.scans.granted} icon={CheckCircle2} tone="success" />
         <StatCard label="Denied" value={data.scans.denied} icon={XCircle} tone="danger" />

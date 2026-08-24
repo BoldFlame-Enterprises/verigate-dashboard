@@ -19,7 +19,7 @@ describe('AnalyticsPage live data', () => {
       if (queryKey[0] === 'analytics-volume') {
         return {
           data: {
-            hourly: [{ bucket: '2026-07-21T21:00:00.000Z', granted: 1, denied: 0 }],
+            hourly: [{ bucket: '2026-07-21T21:00:00.000Z', granted: 1, denied: 2 }],
             peak_hours: [],
           },
           isLoading: false,
@@ -28,9 +28,9 @@ describe('AnalyticsPage live data', () => {
 
       return {
         data: {
-          overall: { total: 1, granted: 1, denied: 0, grant_rate: 1 },
+          overall: { total: 3, granted: 1, denied: 2, grant_rate: 1 / 3 },
           by_area: [],
-          by_access_level: [],
+          by_access_level: [{ id: 1, name: 'General', assigned_users: 4 }],
           by_scanner: [],
         },
         isLoading: false,
@@ -52,5 +52,15 @@ describe('AnalyticsPage live data', () => {
       queryKey: ['analytics-breakdown', 7],
       refetchInterval: 10_000,
     });
+  });
+
+  it('provides decision-equivalent summaries and tables for every chart', () => {
+    render(<AnalyticsPage />);
+
+    expect(screen.getByText('The last 48 hours contain 3 scans: 1 granted and 2 denied.')).toBeInTheDocument();
+    expect(screen.getByRole('table', { name: 'Hourly granted and denied scans for the last 48 hours' }))
+      .toBeInTheDocument();
+    expect(screen.getByText('General has the most assignments (4).')).toBeInTheDocument();
+    expect(screen.getByRole('table', { name: 'Assignments by access level' })).toBeInTheDocument();
   });
 });

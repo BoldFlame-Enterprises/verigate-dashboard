@@ -13,6 +13,7 @@
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "type-check": "tsc --noEmit",
     "test": "vitest run src",
+    "test:accessibility": "vitest run src/components/__tests__/Layout.accessibility.test.tsx",
     "clean": "rm -rf dist node_modules"
   },
   "dependencies": {
@@ -41,6 +42,7 @@
     "@typescript-eslint/parser": "8.67.0",
     "@vitejs/plugin-react": "5.2.0",
     "autoprefixer": "^10.4.15",
+    "axe-core": "^4.10.3",
     "eslint": "8.57.1",
     "eslint-plugin-react-hooks": "^4.6.0",
     "eslint-plugin-react-refresh": "0.4.26",

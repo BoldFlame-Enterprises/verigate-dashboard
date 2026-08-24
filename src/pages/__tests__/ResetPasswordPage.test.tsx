@@ -32,9 +32,9 @@ describe('ResetPasswordPage', () => {
     const user = userEvent.setup();
 
     render(<ResetPasswordPage />);
-    await user.type(screen.getByPlaceholderText('Reset token'), 'used-token');
+    await user.type(screen.getByLabelText('Reset token'), 'used-token');
     await user.type(
-      screen.getByPlaceholderText('New password (15+ characters)'),
+      screen.getByLabelText('New password'),
       'Unique test passphrase 42!',
     );
     await user.click(screen.getByRole('button', { name: 'Reset password' }));

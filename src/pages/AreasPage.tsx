@@ -88,10 +88,14 @@ export default function AreasPage() {
               setFormError(null);
               createArea.mutate();
             }}
-            className="grid grid-cols-2 gap-3"
+            className="grid gap-3 sm:grid-cols-2"
           >
-            <input required placeholder="Name" value={name} onChange={(e) => setName(e.target.value)} className="rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-800" />
-            <input placeholder="Description" value={description} onChange={(e) => setDescription(e.target.value)} className="rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-800" />
+            <label htmlFor="area-name" className="grid gap-1 text-sm font-medium">Area name
+              <input id="area-name" required value={name} onChange={(e) => setName(e.target.value)} className="rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-800" />
+            </label>
+            <label htmlFor="area-description" className="grid gap-1 text-sm font-medium">Description
+              <input id="area-description" value={description} onChange={(e) => setDescription(e.target.value)} className="rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-800" />
+            </label>
             <label className="flex items-center gap-2 text-sm">
               <input type="checkbox" checked={requiresScan} onChange={(e) => setRequiresScan(e.target.checked)} />
               Requires scan
@@ -99,7 +103,7 @@ export default function AreasPage() {
             <button type="submit" disabled={createArea.isPending} className="rounded-md bg-brand-600 px-3 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-60">
               {createArea.isPending ? 'Creating...' : 'Create area'}
             </button>
-            {formError && <p className="col-span-2 text-sm text-red-600 dark:text-red-400">{formError}</p>}
+            {formError && <p role="alert" className="text-sm text-red-700 sm:col-span-2 dark:text-red-300">{formError}</p>}
           </form>
         </div>
       )}
@@ -125,9 +129,11 @@ export default function AreasPage() {
                   <td className="px-4 py-2 text-gray-500 dark:text-gray-400">{a.description}</td>
                   <td className="px-4 py-2">{a.requires_scan ? 'Yes' : 'No'}</td>
                   <td className="px-4 py-2">
-                    <span className={`rounded-full px-2 py-0.5 text-xs ${a.is_active ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400' : 'bg-gray-100 text-gray-500 dark:bg-gray-800'}`}>
-                      {a.is_active ? 'Active' : 'Inactive'}
-                    </span>
+                    {a.is_active ? (
+                      <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300">Active</span>
+                    ) : (
+                      <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-700 dark:bg-gray-800 dark:text-gray-200">Inactive</span>
+                    )}
                   </td>
                   <td className="px-4 py-2 text-right">
                     {a.is_active && (
@@ -136,9 +142,9 @@ export default function AreasPage() {
                           type="button"
                           aria-label={`Deactivate ${a.name}`}
                           onClick={() => deactivateArea.mutate(a.id)}
-                          className="rounded-md p-2 text-gray-500 transition-colors hover:bg-red-50 hover:text-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 dark:hover:bg-red-950/40 dark:hover:text-red-300"
+                          className="rounded-md p-2 text-red-700 transition-colors hover:bg-red-50 hover:text-red-800 focus:outline-none focus:ring-2 focus:ring-red-500 dark:text-red-300 dark:hover:bg-red-950/40"
                         >
-                          <Trash2 className="h-4 w-4" />
+                          <Trash2 aria-hidden="true" className="h-4 w-4" />
                         </button>
                       </Tooltip>
                     )}
