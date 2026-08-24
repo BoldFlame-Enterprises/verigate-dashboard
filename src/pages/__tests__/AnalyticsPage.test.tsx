@@ -31,7 +31,14 @@ describe('AnalyticsPage live data', () => {
           overall: { total: 3, granted: 1, denied: 2, grant_rate: 1 / 3 },
           by_area: [],
           by_access_level: [{ id: 1, name: 'General', assigned_users: 4 }],
-          by_scanner: [],
+          by_scanner: [{
+            id: 2,
+            name: 'Gate scanner',
+            scans: 3,
+            granted: 2,
+            denied: 1,
+            last_scan_at: '2026-07-21T21:00:00.000Z',
+          }],
         },
         isLoading: false,
         isError: false,
@@ -62,5 +69,14 @@ describe('AnalyticsPage live data', () => {
       .toBeInTheDocument();
     expect(screen.getByText('General has the most assignments (4).')).toBeInTheDocument();
     expect(screen.getByRole('table', { name: 'Assignments by access level' })).toBeInTheDocument();
+  });
+
+  it('makes horizontally scrollable analytics tables keyboard accessible', () => {
+    render(<AnalyticsPage />);
+
+    expect(screen.getByRole('region', { name: 'Scrollable hourly scan volume table' }))
+      .toHaveAttribute('tabindex', '0');
+    expect(screen.getByRole('region', { name: 'Scrollable scanner activity table' }))
+      .toHaveAttribute('tabindex', '0');
   });
 });

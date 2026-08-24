@@ -179,7 +179,12 @@ export default function AnalyticsPage() {
             </div>
             <details className="mt-3 rounded-lg border border-gray-200 p-3 dark:border-gray-700">
               <summary className="cursor-pointer font-medium focus:outline-none focus:ring-2 focus:ring-brand-600">View scan volume data table</summary>
-              <div className="mt-3 overflow-x-auto">
+              <div
+                role="region"
+                aria-label="Scrollable hourly scan volume table"
+                tabIndex={0}
+                className="mt-3 overflow-x-auto focus:outline-none focus:ring-2 focus:ring-brand-600"
+              >
                 <table className="w-full min-w-[32rem] text-left text-sm">
                   <caption className="sr-only">Hourly granted and denied scans for the last 48 hours</caption>
                   <thead><tr><th scope="col" className="py-2 pr-4">Time</th><th scope="col" className="py-2 pr-4">Granted</th><th scope="col" className="py-2">Denied</th></tr></thead>
@@ -245,7 +250,12 @@ export default function AnalyticsPage() {
           {breakdown.by_scanner.length === 0 ? (
             <EmptyState title="No scanner activity yet" />
           ) : (
-            <div className="overflow-x-auto">
+            <div
+              role="region"
+              aria-label="Scrollable scanner activity table"
+              tabIndex={0}
+              className="overflow-x-auto focus:outline-none focus:ring-2 focus:ring-brand-600"
+            >
             <table className="w-full min-w-[32rem] text-sm">
               <thead className="text-left text-gray-500 dark:text-gray-400">
                 <tr>
