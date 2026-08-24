@@ -49,7 +49,12 @@ test('creates and rereads an isolated event domain graph through the dashboard o
     }
 
     const usersResult = await api('/users?limit=200');
-    const users = usersResult.body.data as Array<{ id: number; email: string }>;
+    if (!usersResult.response.ok || !usersResult.body.success) {
+      throw new Error(`List users failed: ${usersResult.response.status}`);
+    }
+    const userPage = usersResult.body.data as { items?: Array<{ id: number; email: string }> };
+    if (!Array.isArray(userPage.items)) throw new Error('List users did not return a cursor page');
+    const users = userPage.items;
     const attendee = users.find((user) => user.email === 'vip@test.com');
     const scanner = users.find((user) => user.email === 'scanner@test.com');
     if (!attendee || !scanner) throw new Error('Disposable seed users are unavailable');
