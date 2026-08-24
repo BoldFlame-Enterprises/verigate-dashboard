@@ -98,20 +98,18 @@ test('keeps authenticated operation accessible at narrow width and browser zoom'
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await signIn(page, 'admin@test.com', eventId);
 
+  await page.keyboard.press('Tab');
+  const skipLink = page.getByRole('link', { name: 'Skip to main content' });
+  await expect(skipLink).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#main-content')).toBeFocused();
+
   const menu = page.getByRole('button', { name: 'Open navigation' });
   await expect(menu).toBeVisible();
   await menu.click();
   await expect(page.getByRole('navigation', { name: 'Primary' })).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(menu).toBeFocused();
-
-  await page.reload();
-  await expect(menu).toBeVisible();
-  await page.keyboard.press('Tab');
-  const skipLink = page.getByRole('link', { name: 'Skip to main content' });
-  await expect(skipLink).toBeFocused();
-  await page.keyboard.press('Enter');
-  await expect(page.locator('#main-content')).toBeFocused();
 
   await spaNavigate(page, '/analytics');
   await expect(page.getByRole('heading', { name: 'Analytics' })).toBeVisible();
