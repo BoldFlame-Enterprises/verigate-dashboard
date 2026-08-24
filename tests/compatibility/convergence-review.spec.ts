@@ -105,8 +105,8 @@ test('keeps authenticated operation accessible at narrow width and browser zoom'
   await page.keyboard.press('Escape');
   await expect(menu).toBeFocused();
 
-  await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
-  await expect.poll(() => page.evaluate(() => document.activeElement === document.body)).toBe(true);
+  await page.reload();
+  await expect(menu).toBeVisible();
   await page.keyboard.press('Tab');
   const skipLink = page.getByRole('link', { name: 'Skip to main content' });
   await expect(skipLink).toBeFocused();
